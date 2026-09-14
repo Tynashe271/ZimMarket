@@ -1,0 +1,1 @@
+import { Module } from '@nestjs/common';import{GrowthController}from'./growth.controller';import{ReferralsController}from'./referrals.controller';import{GrowthService}from'./growth.service';@Module({controllers:[GrowthController,ReferralsController],providers:[GrowthService]})export class GrowthModule{}

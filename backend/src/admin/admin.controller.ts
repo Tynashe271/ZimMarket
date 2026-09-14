@@ -1,0 +1,17 @@
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, UseGuards } from '@nestjs/common'; import { AdStatus, BusinessStatus, DisputeStatus, DocumentStatus, PayoutStatus, VerificationLevel } from '@prisma/client'; import { IsBoolean, IsEnum, IsOptional, IsString, MinLength } from 'class-validator'; import { JwtAuthGuard } from '../auth/jwt-auth.guard'; import { AuthUser } from '../auth/jwt.strategy'; import { CurrentUser } from '../common/current-user.decorator'; import { AdminService } from './admin.service';
+class BusinessStatusDto { @IsEnum(BusinessStatus) status!: BusinessStatus; } class AdStatusDto { @IsEnum(AdStatus) status!: AdStatus; } class DocumentStatusDto { @IsEnum(DocumentStatus) status!: DocumentStatus; } class PayoutStatusDto { @IsEnum(PayoutStatus) status!: PayoutStatus; }
+class VerificationDto{@IsEnum(VerificationLevel)level!:VerificationLevel}class ReviewModerationDto{@IsBoolean()hidden!:boolean}class DisputeDto{@IsEnum(DisputeStatus)status!:DisputeStatus;@IsOptional()@IsString()resolution?:string}
+class FiscalisationReviewDto { @IsBoolean() approved!:boolean; @IsBoolean() taxpayerActive!:boolean; @IsBoolean() deviceActive!:boolean; @IsBoolean() deviceRegistered!:boolean; @IsOptional() @IsString() @MinLength(3) receiptVerificationReference?:string; @IsOptional() @IsString() rejectionReason?:string; @IsOptional() @IsString() nextReviewAt?:string; }
+@Controller('admin') @UseGuards(JwtAuthGuard) export class AdminController {
+  constructor(private readonly s: AdminService) {}
+  @Patch('businesses/:id') business(@CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() d: BusinessStatusDto) { return this.s.business(u.userId,u.accountType,id,d.status); }
+  @Patch('ads/:id') ad(@CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() d: AdStatusDto) { return this.s.ad(u.userId,u.accountType,id,d.status); }
+  @Patch('documents/:id') document(@CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() d: DocumentStatusDto) { return this.s.document(u.userId,u.accountType,id,d.status); }
+  @Patch('payouts/:id') payout(@CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() d: PayoutStatusDto) { return this.s.payout(u.userId,u.accountType,id,d.status); }
+  @Get('reports') reports(@CurrentUser() u: AuthUser) { return this.s.reports(u.accountType); }
+  @Patch('businesses/:id/verification') verification(@CurrentUser()u:AuthUser,@Param('id',ParseUUIDPipe)id:string,@Body()d:VerificationDto){return this.s.verification(u.userId,u.accountType,id,d.level)}
+  @Patch('businesses/:id/fiscalisation') fiscalisation(@CurrentUser()u:AuthUser,@Param('id',ParseUUIDPipe)id:string,@Body()d:FiscalisationReviewDto){return this.s.fiscalisation(u.userId,u.accountType,id,d)}
+  @Patch('reviews/:id') review(@CurrentUser()u:AuthUser,@Param('id',ParseUUIDPipe)id:string,@Body()d:ReviewModerationDto){return this.s.review(u.userId,u.accountType,id,d.hidden)}
+  @Patch('disputes/:id') dispute(@CurrentUser()u:AuthUser,@Param('id',ParseUUIDPipe)id:string,@Body()d:DisputeDto){return this.s.dispute(u.userId,u.accountType,id,d.status,d.resolution)}
+  @Get('support/tickets') tickets(@CurrentUser()u:AuthUser){return this.s.tickets(u.accountType)}
+}

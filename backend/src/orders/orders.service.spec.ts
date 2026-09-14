@@ -1,0 +1,2 @@
+import { ForbiddenException } from '@nestjs/common'; import { OrdersService } from './orders.service';
+describe('OrdersService account context', () => { it('blocks business accounts from storefront checkout', async () => { const service = new OrdersService({} as never, {} as never); await expect(service.create('id','BUSINESS',[{ productId: 'p', quantity: 1 }])).rejects.toBeInstanceOf(ForbiddenException); }); });

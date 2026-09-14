@@ -1,0 +1,18 @@
+{
+  "name": "zimmarket",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "test": "npm --prefix backend test -- --runInBand",
+    "test:frontend": "npm --prefix frontend test",
+    "test:e2e": "npm --prefix backend run test:e2e",
+    "test:e2e:frontend": "npm --prefix frontend run test:e2e",
+    "test:all": "npm run test && npm run test:frontend",
+    "lint": "npm --prefix backend run lint",
+    "typecheck": "npm --prefix frontend run typecheck"
+  }
+}

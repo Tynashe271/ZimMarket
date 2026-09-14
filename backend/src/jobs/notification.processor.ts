@@ -1,0 +1,23 @@
+import { Processor, WorkerHost } from '@nestjs/bullmq'; import { Injectable, Logger } from '@nestjs/common'; import { Job } from 'bullmq'; import { PrismaService } from '../prisma/prisma.service'; import { ProviderGateway } from '../providers/provider.gateway';
+@Injectable() @Processor('notifications') export class NotificationProcessor extends WorkerHost {
+  private readonly logger = new Logger(NotificationProcessor.name);
+  constructor(private readonly prisma: PrismaService,private readonly providers:ProviderGateway) { super(); }
+  async process(job: Job<{ userId?: string; type?: string; code?: string; requestId?: string; category?: string; productId?: string; reservationId?: string }>) {
+    if(job.name==='compliance-expiry-scan'||job.name==='zimra-licence-scan') return this.scanZimraLicences();
+    if(job.name==='birthday-scan'){
+      const accounts=await this.prisma.loyaltyAccount.findMany({where:{program:{active:true},customer:{birthDate:{not:null}}},include:{customer:{select:{id:true,birthDate:true}},program:{select:{name:true,business:{select:{name:true}}}}}});
+      const now=new Date();const matches=accounts.filter(a=>a.customer.birthDate?.getUTCMonth()===now.getUTCMonth()&&a.customer.birthDate?.getUTCDate()===now.getUTCDate());
+      this.logger.log(`Birthday promotion scan matched ${matches.length} loyalty accounts`);return{matches:matches.length};
+    }
+    if (job.name === 'reservation-expire' && job.data.reservationId) {
+      const reservation = await this.prisma.reservation.findFirst({ where: { id: job.data.reservationId, status: 'ACTIVE', expiresAt: { lte: new Date() } } });
+      if (reservation) await this.prisma.$transaction([this.prisma.reservation.update({ where: { id: reservation.id }, data: { status: 'EXPIRED' } }), this.prisma.branchInventory.update({ where: { branchId_productId: { branchId: reservation.branchId, productId: reservation.productId } }, data: { reserved: { decrement: reservation.quantity } } })]);
+      return { expired: !!reservation };
+    }
+    const user=job.data.userId?await this.prisma.user.findUnique({where:{id:job.data.userId},select:{phone:true,email:true}}):null;
+    if(!user)return{skipped:true};const channel=job.data.type==='EMAIL'?'EMAIL':'SMS';const target=channel==='EMAIL'?user.email:user.phone;if(!target)return{skipped:true};
+    this.logger.log(`Dispatching ${job.name} through ${channel}`);
+    return this.providers.send(channel,target,job.name,job.data);
+  }
+  private async scanZimraLicences(){const now=new Date(),limit=new Date(now.getTime()+30*86400000);const records=await this.prisma.businessFiscalisation.findMany({where:{status:{in:['COMPLIANT','EXPIRING_SOON']},taxClearanceExpiresAt:{lte:limit}},include:{business:{include:{members:{where:{role:'OWNER'},include:{user:{select:{email:true,phone:true}}}}}}}});let suspended=0,reminded=0;for(const record of records){const days=Math.ceil((record.taxClearanceExpiresAt.getTime()-now.getTime())/86400000);const schedule=[1,3,7,14,30];const threshold=schedule.find(value=>days<=value);if(days<=0){await this.prisma.$transaction([this.prisma.businessFiscalisation.update({where:{id:record.id},data:{status:'EXPIRED'}}),this.prisma.business.update({where:{id:record.businessId},data:{status:'SUSPENDED'}}),this.prisma.product.updateMany({where:{businessId:record.businessId,status:'ACTIVE'},data:{status:'DRAFT'}})]);suspended++;}else if(record.status!=='EXPIRING_SOON')await this.prisma.businessFiscalisation.update({where:{id:record.id},data:{status:'EXPIRING_SOON'}});const field=threshold===30?'reminder30SentAt':threshold===14?'reminder14SentAt':threshold===7?'reminder7SentAt':threshold===3?'reminder3SentAt':threshold===1?'reminder1SentAt':null;if(days<=0||(field&&!record[field])){const owners=record.business.members.flatMap(member=>[member.user.email,member.user.phone]).filter((value):value is string=>Boolean(value));const template=days<=0?'TAX_CLEARANCE_EXPIRED':`TAX_CLEARANCE_EXPIRES_${threshold}_DAYS`;await this.prisma.notificationOutbox.createMany({data:owners.map(recipient=>({channel:recipient.includes('@')?'EMAIL':'SMS',recipient,template,payload:{businessId:record.businessId,businessName:record.business.name,taxClearanceExpiresAt:record.taxClearanceExpiresAt.toISOString(),action:'Obtain or update your compliance through ZIMRA/TaRMS and upload the renewed ITF263 certificate.'}}))});if(field){await this.prisma.businessFiscalisation.update({where:{id:record.id},data:{[field]:now}});reminded++;}}}return{checked:records.length,reminded,suspended};}
+}

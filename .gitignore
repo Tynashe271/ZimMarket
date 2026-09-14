@@ -1,0 +1,15 @@
+backend/node_modules/
+backend/dist/
+backend/dist-stale-before-folder-fix/
+backend/.env
+backend/.data/
+backend/coverage/
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/.env.local
+frontend/tsconfig.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+*.log
+.devin/config.local.json

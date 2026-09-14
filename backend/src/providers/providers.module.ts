@@ -1,0 +1,1 @@
+import{Global,Module}from'@nestjs/common';import{ProviderGateway}from'./provider.gateway';import{DemoProvidersController}from'./demo-providers.controller';@Global()@Module({controllers:[DemoProvidersController],providers:[ProviderGateway],exports:[ProviderGateway]})export class ProvidersModule{}

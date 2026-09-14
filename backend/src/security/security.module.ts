@@ -1,0 +1,1 @@
+import{Global,Module}from'@nestjs/common';import{FraudService}from'./fraud.service';import{FraudController}from'./fraud.controller';@Global()@Module({controllers:[FraudController],providers:[FraudService],exports:[FraudService]})export class SecurityModule{}
