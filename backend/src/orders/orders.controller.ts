@@ -1,13 +1,14 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsArray, IsEnum, IsInt, IsOptional, IsPhoneNumber, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser } from '../auth/jwt.strategy';
 import { CurrentUser } from '../common/current-user.decorator';
+import { normalizePhone } from '../common/phone';
 import { OrdersService } from './orders.service';
 class OrderLineDto { @IsUUID() productId!: string; @IsInt() @Min(1) quantity!: number; }
-class RecipientDto { @IsString() name!: string; @IsPhoneNumber() phone!: string; @IsString() address!: string; @IsString() city!: string; }
+class RecipientDto { @IsString() name!: string; @Transform(({ value }) => normalizePhone(value)) @IsPhoneNumber('ZW') phone!: string; @IsString() address!: string; @IsString() city!: string; }
 class CreateOrderDto { @IsArray() @ValidateNested({ each: true }) @Type(() => OrderLineDto) items!: OrderLineDto[]; @IsOptional() @IsUUID() branchId?: string; @IsOptional() @ValidateNested() @Type(() => RecipientDto) recipient?: RecipientDto; }
 class StatusDto { @IsEnum(OrderStatus) status!: OrderStatus; }
 @Controller('orders') @UseGuards(JwtAuthGuard)

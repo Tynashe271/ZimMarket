@@ -7,6 +7,7 @@ import { randomInt } from 'crypto';
 import { JobsService } from '../jobs/jobs.service';
 import { FraudService } from '../security/fraud.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizePhone } from '../common/phone';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -36,7 +37,7 @@ export class AuthService {
     const user = await this.prisma.user.findFirst({
       where: dto.identifier.includes('@')
         ? { email: dto.identifier.toLowerCase() }
-        : { phone: dto.identifier },
+        : { phone: normalizePhone(dto.identifier) as string },
     });
     if (!user) throw new UnauthorizedException('Invalid credentials');
     if (user.lockedUntil && user.lockedUntil > new Date()) throw new UnauthorizedException('Account temporarily locked');
