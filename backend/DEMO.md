@@ -4,7 +4,7 @@ The demo requires only PostgreSQL and Redis. It does not require a frontend or t
 
 ```powershell
 Copy-Item .env.example .env  # only when .env does not already exist
-docker compose up -d
+podman compose up -d
 npx prisma migrate deploy
 npm run db:seed
 npm run start:dev

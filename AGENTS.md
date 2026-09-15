@@ -9,7 +9,7 @@
 ### Backend
 ```powershell
 cd backend
-docker compose up -d
+podman compose up -d
 npm install
 npx prisma migrate dev
 npm run db:seed
@@ -24,16 +24,20 @@ npm run dev
 ```
 
 ### Access Points
-- Frontend: http://localhost:3001
-- Backend API: http://localhost:3000
-- Swagger Docs: http://localhost:3000/docs
-- Health Check: http://localhost:3000/api/v1/health
+- Frontend: http://localhost:3006
+- Backend API: http://localhost:3007
+- Swagger Docs: http://localhost:3007/docs
+- Health Check: http://localhost:3007/api/v1/health
 
 ## Configuration Notes
 
+### Container runtime
+- Docker Desktop's backend fails to start on this machine ("backend exited before becoming ready", no further detail in its own logs). Use **Podman** instead — it's already installed and its `podman compose` subcommand reads the same `docker-compose.yml`.
+- The compose project is explicitly named `zimmarket-backend` (`name:` key in `backend/docker-compose.yml`) so its containers (`zimmarket-backend-postgres-1`, `zimmarket-backend-redis-1`) don't collide with other local projects that also default to a generic `backend` project name.
+
 ### Port Conflicts Fixed
 - Redis port changed from 6379 to 6380 (due to existing Redis instance)
-- PostgreSQL port changed from 5433 to 5434 (due to existing PostgreSQL instance)
+- PostgreSQL port changed from 5433 to 5434, then to 5435 (5434 collided with an unrelated local project's Postgres container also named `backend-postgres-1`)
 - Updated in `backend/docker-compose.yml` and `backend/.env`
 
 ### Environment Variables
