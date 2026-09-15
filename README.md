@@ -1,5 +1,7 @@
 # ZimMarket
 
+[![Backend CI](https://github.com/Tynashe271/ZimMarket/actions/workflows/backend.yml/badge.svg?branch=master)](https://github.com/Tynashe271/ZimMarket/actions/workflows/backend.yml)
+
 ZimMarket is split into two independent applications:
 
 - `backend/` — NestJS, Prisma, PostgreSQL and Redis API
