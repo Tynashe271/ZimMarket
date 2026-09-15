@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-stale-before-folder-fix
+coverage
+.data
+.env
+.env.*
+!.env.example
+*.log

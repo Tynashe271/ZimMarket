@@ -23,6 +23,6 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
-  await app.listen(config.get<number>('PORT', 3000));
+  await app.listen(config.get<number>('PORT', 3000), '0.0.0.0');
 }
 void bootstrap();
