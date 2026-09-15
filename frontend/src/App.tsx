@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, Bot, ChevronRight, Heart, LoaderCircle, MapPin, Menu, MessageCircle, Search, Send, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Store, Truck, UserRound, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Bot, ChevronRight, Flag, Heart, LoaderCircle, MapPin, Menu, MessageCircle, Search, Send, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Store, Truck, UserRound, X } from 'lucide-react';
 import { api, Business, MarketplaceService, Product, savedSession, saveSession, Session } from './api';
 import { addToCart } from './cart';
 
@@ -159,8 +159,48 @@ export function App({ page = 'home' }: { page?: PageName }) {
 
     <footer><a className="brand" href="/"><span className="brand-mark">Z</span><span>ZimMarket</span></a><p>Zimbabwe's marketplace for local products, services and businesses.</p><div><a href="/marketplace">Marketplace</a><a href="/services">Services</a><a href="/businesses">Businesses</a><a href="/about">About</a></div><small>© 2026 ZimMarket. Made with care in Zimbabwe.</small></footer>
     <Assistant />
-    {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSuccess={updateSession}/>} 
+    <Feedback session={session} openAuth={() => setAuthOpen(true)}/>
+    {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSuccess={updateSession}/>}
   </>;
+}
+
+function Feedback({ session, openAuth }: { session: Session | null; openAuth: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState('General feedback');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!session) { openAuth(); return; }
+    const details = message.trim();
+    if (!details || busy) return;
+    setBusy(true); setNotice('');
+    try {
+      await api.createSupportTicket(session.accessToken, { category, subject: category, details });
+      setMessage('');
+      setNotice('Thank you — your feedback has been sent to our team.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Feedback could not be sent.');
+    } finally { setBusy(false); }
+  }
+
+  return <div className="feedback-wrap">
+    {open && <section className="feedback-panel" aria-label="Share feedback or a complaint">
+      <header><span><span className="feedback-avatar"><Flag size={18}/></span><span><b>Feedback &amp; complaints</b><small>Tell us what's on your mind</small></span></span><button onClick={() => setOpen(false)} aria-label="Close feedback"><X size={19}/></button></header>
+      {session ? <form onSubmit={submit}>
+        <label>Category<select value={category} onChange={event => setCategory(event.target.value)}>
+          <option>General feedback</option><option>Complaint</option><option>Suggestion</option><option>Account problem</option><option>Payment problem</option><option>Technical problem</option>
+        </select></label>
+        <textarea value={message} onChange={event => setMessage(event.target.value)} maxLength={2000} placeholder="Share your views, comments or complaint…" aria-label="Your feedback" required/>
+        {notice && <p className="feedback-notice">{notice}</p>}
+        <button disabled={busy || !message.trim()}>{busy ? 'Sending…' : 'Send feedback'}</button>
+      </form> : <div className="feedback-signin"><p>Sign in to send feedback — our team will follow up with you.</p><button onClick={openAuth}>Sign in</button></div>}
+      <footer>Your feedback goes straight to the ZimMarket support team.</footer>
+    </section>}
+    <button className="feedback-toggle" onClick={() => setOpen(!open)} aria-label="Share feedback or a complaint">{open ? <X/> : <Flag/>}<span>Feedback</span></button>
+  </div>;
 }
 
 type ChatMessage = { role: 'assistant' | 'user'; text: string; mode?: 'ai' | 'local' };
