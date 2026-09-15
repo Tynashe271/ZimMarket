@@ -9,6 +9,9 @@ services:
     type: keyvalue
     plan: free
     maxmemoryPolicy: noeviction
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: allow all (free-tier job queue, no sensitive data)
 
   - name: zimmarket-backend
     type: web
@@ -17,7 +20,6 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /api/v1/health
-    preDeployCommand: npx prisma migrate deploy
     envVars:
       - key: NODE_ENV
         value: production

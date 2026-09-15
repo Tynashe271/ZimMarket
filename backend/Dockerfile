@@ -21,4 +21,6 @@ COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 USER node
-CMD ["node", "dist/main.js"]
+# Render's free tier doesn't support preDeployCommand, so migrations run on container
+# startup instead. Idempotent (no-op when there's nothing pending), safe on every restart.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
