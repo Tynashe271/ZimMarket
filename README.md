@@ -13,7 +13,7 @@ Start the backend dependencies and API:
 
 ```powershell
 cd backend
-podman compose up -d
+podman-compose up -d
 npm install
 npx prisma migrate dev
 npm run db:seed

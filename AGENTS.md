@@ -9,7 +9,7 @@
 ### Backend
 ```powershell
 cd backend
-podman compose up -d
+podman-compose up -d
 npm install
 npx prisma migrate dev
 npm run db:seed
@@ -32,8 +32,9 @@ npm run dev
 ## Configuration Notes
 
 ### Container runtime
-- Docker Desktop's backend fails to start on this machine ("backend exited before becoming ready", no further detail in its own logs). Use **Podman** instead — it's already installed and its `podman compose` subcommand reads the same `docker-compose.yml`.
-- The compose project is explicitly named `zimmarket-backend` (`name:` key in `backend/docker-compose.yml`) so its containers (`zimmarket-backend-postgres-1`, `zimmarket-backend-redis-1`) don't collide with other local projects that also default to a generic `backend` project name.
+- Docker Desktop is **not installed** on this machine (removed 2026-09-15 — its backend repeatedly failed to start: "backend exited before becoming ready", no further detail in its own logs). Use **Podman** for everything container-related.
+- Use the standalone `podman-compose` CLI (`pip install podman-compose`, installed to `%APPDATA%\Python\Python314\Scripts`, which is on PATH), not `podman compose` (the built-in subcommand) — that subcommand shells out to an external provider binary that Docker Desktop used to supply, so it no longer works now that Docker Desktop is gone.
+- The compose project is explicitly named `zimmarket-backend` (`name:` key in `backend/docker-compose.yml`) so its containers (`zimmarket-backend_postgres_1`, `zimmarket-backend_redis_1` — `podman-compose` uses underscore-separated names, unlike the hyphenated names `docker compose` used to produce) don't collide with other local projects that also default to a generic `backend` project name.
 
 ### Port Conflicts Fixed
 - Redis port changed from 6379 to 6380 (due to existing Redis instance)

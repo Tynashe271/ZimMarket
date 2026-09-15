@@ -6,7 +6,7 @@ NestJS API for a multi-tenant marketplace using PostgreSQL, Prisma and Redis/Bul
 
 ```bash
 cp .env.example .env
-podman compose up -d
+podman-compose up -d
 npm install
 npx prisma migrate dev --name init
 npm run start:dev
