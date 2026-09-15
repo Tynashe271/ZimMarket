@@ -16,13 +16,15 @@ async function bootstrap() {
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('ZimMarket API')
-    .setDescription('Secure multi-tenant marketplace API')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  if (config.get('NODE_ENV') !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('ZimMarket API')
+      .setDescription('Secure multi-tenant marketplace API')
+      .setVersion('0.1.0')
+      .addBearerAuth()
+      .build();
+    SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  }
   await app.listen(config.get<number>('PORT', 3000), '0.0.0.0');
 }
 void bootstrap();
