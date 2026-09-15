@@ -13,6 +13,8 @@ class DemoPaymentDto{@IsString()status!:'SUCCEEDED'|'FAILED'}
   @Get('payments/:id/receipt') @UseGuards(JwtAuthGuard) receipt(@CurrentUser()u:AuthUser,@Param('id')id:string){return this.service.receipt(u.userId,u.accountType,id)}
   @Post('payouts') @UseGuards(JwtAuthGuard) payout(@CurrentUser() u: AuthUser, @Body() d: PayoutDto) { return this.service.requestPayout(u.userId, d.businessId, d.amount, d.currency.toUpperCase(), d.destination); }
   @Post('webhooks/payment') webhook(@Headers('x-webhook-signature') signature: string, @Body() body: WebhookDto) { return this.service.webhook(signature ?? '', body); }
+  @Post('webhooks/paynow') paynowWebhook(@Body() body: Record<string,string>) { return this.service.paynowResultCallback(body); }
+  @Get('payments/:id/status') @UseGuards(JwtAuthGuard) paymentStatus(@CurrentUser()u:AuthUser,@Param('id')id:string){return this.service.pollPaymentStatus(u.userId,id)}
   @Post('refunds') @UseGuards(JwtAuthGuard) refund(@CurrentUser()u:AuthUser,@Body()d:RefundDto){return this.service.requestRefund(u.userId,d.orderId,d.amount,d.reason)}
   @Post('businesses/:businessId/refunds/:id/review') @UseGuards(JwtAuthGuard) reviewRefund(@CurrentUser()u:AuthUser,@Param('businessId')b:string,@Param('id')id:string,@Body()d:RefundReviewDto){return this.service.reviewRefund(u.userId,b,id,d.approve)}
   @Post('webhooks/refund') refundWebhook(@Headers('x-webhook-signature')signature:string,@Body()d:RefundWebhookDto){return this.service.completeRefund(signature??'',d)}

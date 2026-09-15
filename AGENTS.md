@@ -50,7 +50,7 @@ npm run dev
 - Multi-tenant marketplace with authentication
 - Business management with role-based access
 - Product catalog and inventory management
-- Order processing and payment integration
+- Order processing with real Paynow Zimbabwe gateway integration (EcoCash, OneMoney, cards, bank transfer via Paynow's hosted checkout), plus a `development`-mode simulator for local work — see `backend/src/finance/paynow.provider.ts` and `PAYMENT_PROVIDER` in `.env.example`
 - Messaging system between customers and businesses
 - Document management with malware scanning
 - Subscription plans and feature gates
