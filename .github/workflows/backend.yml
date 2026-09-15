@@ -5,6 +5,21 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://zimmarket:zimmarket@127.0.0.1:5434/zimmarket?schema=public
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6380
+      JWT_ACCESS_SECRET: ci-test-access-secret-at-least-32-chars
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-at-least-32-chars
+      JWT_REFRESH_TTL_DAYS: "30"
+      CORS_ORIGINS: http://localhost:3006
+      PAYMENT_WEBHOOK_SECRET: ci-test-payment-webhook-secret
+      STORAGE_SIGNING_SECRET: ci-test-storage-signing-secret
+      APP_PUBLIC_URL: http://localhost:3006
+      API_PUBLIC_URL: http://localhost:3007/api/v1
+      LOCAL_STORAGE_PATH: .data/storage
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
