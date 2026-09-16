@@ -1,16 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SmsProvider, SmsSendResult } from './sms-provider.interface';
 
 // Africa's Talking SMS API (https://developers.africastalking.com/docs/sms/sending/bulk).
 // Sandbox apps (username "sandbox") must use the sandbox host; live apps use the production host.
 const LIVE_URL = 'https://api.africastalking.com/version1/messaging';
 const SANDBOX_URL = 'https://api.sandbox.africastalking.com/version1/messaging';
-
-export interface SmsSendResult {
-  success: boolean;
-  messageId?: string;
-  error?: string;
-}
 
 interface AfricasTalkingRecipient {
   number: string;
@@ -25,7 +20,7 @@ interface AfricasTalkingResponse {
 }
 
 @Injectable()
-export class AfricasTalkingProvider {
+export class AfricasTalkingProvider implements SmsProvider {
   private readonly logger = new Logger(AfricasTalkingProvider.name);
 
   constructor(private readonly config: ConfigService) {}

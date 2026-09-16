@@ -1,11 +1,13 @@
-import{BadRequestException,Injectable,NotFoundException,UnauthorizedException}from'@nestjs/common';import{ConfigService}from'@nestjs/config';import{Prisma}from'@prisma/client';import{createHash,createHmac,timingSafeEqual}from'crypto';import{mkdir,readFile,writeFile}from'fs/promises';import{dirname,extname,isAbsolute,resolve,sep}from'path';import{PrismaService}from'../prisma/prisma.service';import{AfricasTalkingProvider}from'./africastalking.provider';
+import{BadRequestException,Injectable,NotFoundException,UnauthorizedException}from'@nestjs/common';import{ConfigService}from'@nestjs/config';import{Prisma}from'@prisma/client';import{createHash,createHmac,timingSafeEqual}from'crypto';import{mkdir,readFile,writeFile}from'fs/promises';import{dirname,extname,isAbsolute,resolve,sep}from'path';import{PrismaService}from'../prisma/prisma.service';import{AfricasTalkingProvider}from'./africastalking.provider';import{TwilioProvider}from'./twilio.provider';import{SmsProvider}from'./sms-provider.interface';
 export type MessageChannel='SMS'|'EMAIL'|'WHATSAPP';
 @Injectable()export class ProviderGateway{
- constructor(private readonly config:ConfigService,private readonly prisma:PrismaService,private readonly africasTalking:AfricasTalkingProvider){}
+ private readonly smsProviders:Record<string,SmsProvider>;
+ constructor(private readonly config:ConfigService,private readonly prisma:PrismaService,africasTalking:AfricasTalkingProvider,twilio:TwilioProvider){this.smsProviders={africastalking:africasTalking,twilio}}
  async send(channel:MessageChannel,to:string,template:string,data:Record<string,unknown>){
   const provider=this.config.get(`${channel}_PROVIDER`,'development');
-  if(channel==='SMS'&&provider==='africastalking'){
-   const result=await this.africasTalking.sendSms(to,this.renderSmsBody(template,data));
+  const smsProvider=channel==='SMS'?this.smsProviders[provider]:undefined;
+  if(smsProvider){
+   const result=await smsProvider.sendSms(to,this.renderSmsBody(template,data));
    const message=await this.prisma.notificationOutbox.create({data:{channel,recipient:to,template,payload:this.json(data),status:result.success?'SENT':'FAILED'}});
    await this.event(provider,`${channel}.send`,result.success?'SUCCESS':'FAILED',{messageId:message.id,providerMessageId:result.messageId,error:result.error});
    if(!result.success)throw new BadRequestException(result.error||'SMS provider could not send the message');
