@@ -94,6 +94,35 @@ export class AuthService {
     return { verified: true };
   }
 
+  async requestPasswordReset(identifier: string) {
+    const user = await this.prisma.user.findFirst({
+      where: identifier.includes('@') ? { email: identifier.toLowerCase() } : { phone: normalizePhone(identifier) as string },
+    });
+    if (user) {
+      const code = randomInt(100000, 1000000).toString();
+      await this.prisma.verificationToken.create({ data: { userId: user.id, type: 'PASSWORD_RESET', tokenHash: await argon2.hash(code), expiresAt: new Date(Date.now() + 10 * 60_000) } });
+      await this.jobs.verification(user.id, 'PASSWORD_RESET', code);
+      if (this.config.get('NODE_ENV') === 'development') return { accepted: true, developmentCode: code };
+    }
+    return { accepted: true };
+  }
+
+  async confirmPasswordReset(identifier: string, code: string, newPassword: string) {
+    const user = await this.prisma.user.findFirst({
+      where: identifier.includes('@') ? { email: identifier.toLowerCase() } : { phone: normalizePhone(identifier) as string },
+    });
+    if (!user) throw new BadRequestException('Invalid or expired verification code');
+    const records = await this.prisma.verificationToken.findMany({ where: { userId: user.id, type: 'PASSWORD_RESET', usedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' }, take: 3 });
+    const record = (await Promise.all(records.map(async r => ({ r, ok: await argon2.verify(r.tokenHash, code) })))).find(x => x.ok)?.r;
+    if (!record) throw new BadRequestException('Invalid or expired verification code');
+    await this.prisma.$transaction([
+      this.prisma.verificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await argon2.hash(newPassword), failedLoginCount: 0, lockedUntil: null } }),
+      this.prisma.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+    ]);
+    return { reset: true };
+  }
+
   private async createSession(user: { id: string; accountType: string }) {
     const expiresAt = new Date(Date.now() + this.config.get<number>('JWT_REFRESH_TTL_DAYS', 30) * 86_400_000);
     const session = await this.prisma.session.create({ data: { userId: user.id, refreshTokenHash: 'pending', expiresAt } });

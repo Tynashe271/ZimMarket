@@ -1,8 +1,19 @@
-import{BadRequestException,Injectable,NotFoundException,UnauthorizedException}from'@nestjs/common';import{ConfigService}from'@nestjs/config';import{Prisma}from'@prisma/client';import{createHash,createHmac,timingSafeEqual}from'crypto';import{mkdir,readFile,writeFile}from'fs/promises';import{dirname,extname,isAbsolute,resolve,sep}from'path';import{PrismaService}from'../prisma/prisma.service';
+import{BadRequestException,Injectable,NotFoundException,UnauthorizedException}from'@nestjs/common';import{ConfigService}from'@nestjs/config';import{Prisma}from'@prisma/client';import{createHash,createHmac,timingSafeEqual}from'crypto';import{mkdir,readFile,writeFile}from'fs/promises';import{dirname,extname,isAbsolute,resolve,sep}from'path';import{PrismaService}from'../prisma/prisma.service';import{AfricasTalkingProvider}from'./africastalking.provider';
 export type MessageChannel='SMS'|'EMAIL'|'WHATSAPP';
 @Injectable()export class ProviderGateway{
- constructor(private readonly config:ConfigService,private readonly prisma:PrismaService){}
- async send(channel:MessageChannel,to:string,template:string,data:Record<string,unknown>){const provider=this.config.get(`${channel}_PROVIDER`,'development');if(provider!=='development')throw new BadRequestException(`${channel} provider credentials are not configured`);const message=await this.prisma.notificationOutbox.create({data:{channel,recipient:to,template,payload:this.json(data)}});await this.event(provider,`${channel}.send`,'SUCCESS',{messageId:message.id});return{provider,accepted:true,messageId:message.id,to:`***${to.slice(-4)}`,template}}
+ constructor(private readonly config:ConfigService,private readonly prisma:PrismaService,private readonly africasTalking:AfricasTalkingProvider){}
+ async send(channel:MessageChannel,to:string,template:string,data:Record<string,unknown>){
+  const provider=this.config.get(`${channel}_PROVIDER`,'development');
+  if(channel==='SMS'&&provider==='africastalking'){
+   const result=await this.africasTalking.sendSms(to,this.renderSmsBody(template,data));
+   const message=await this.prisma.notificationOutbox.create({data:{channel,recipient:to,template,payload:this.json(data),status:result.success?'SENT':'FAILED'}});
+   await this.event(provider,`${channel}.send`,result.success?'SUCCESS':'FAILED',{messageId:message.id,providerMessageId:result.messageId,error:result.error});
+   if(!result.success)throw new BadRequestException(result.error||'SMS provider could not send the message');
+   return{provider,accepted:true,messageId:message.id,to:`***${to.slice(-4)}`,template};
+  }
+  if(provider!=='development')throw new BadRequestException(`${channel} provider credentials are not configured`);
+  const message=await this.prisma.notificationOutbox.create({data:{channel,recipient:to,template,payload:this.json(data)}});await this.event(provider,`${channel}.send`,'SUCCESS',{messageId:message.id});return{provider,accepted:true,messageId:message.id,to:`***${to.slice(-4)}`,template}}
+ private renderSmsBody(template:string,data:Record<string,unknown>){if(template==='verification'&&typeof data.code==='string'){const purpose=data.type==='PASSWORD_RESET'?'password reset':data.type==='MFA'?'sign-in':'verification';return`Your ZimMarket ${purpose} code is ${data.code}. It expires in 10 minutes.`}return`ZimMarket: ${template}`}
  async scan(storageKey:string,mimeType:string){const blocked=['.exe','.dll','.bat','.cmd','.ps1','.com','.scr'];const clean=!blocked.includes(extname(storageKey).toLowerCase())&&!mimeType.includes('x-msdownload');return{storageKey,mimeType,clean,engine:this.config.get('MALWARE_SCANNER','development')}}
  async scanBuffer(storageKey:string,mimeType:string,buffer:Buffer){const metadata=await this.scan(storageKey,mimeType);const eicar=buffer.toString('utf8').includes('EICAR-STANDARD-ANTIVIRUS-TEST-FILE');return{...metadata,clean:metadata.clean&&!eicar,sha256:createHash('sha256').update(buffer).digest('hex')}}
  signedUpload(storageKey:string,mimeType:string,expiresSeconds=900){return this.signed('upload',storageKey,mimeType,expiresSeconds)}

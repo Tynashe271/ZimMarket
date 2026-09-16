@@ -37,7 +37,7 @@ Implement the corresponding operation in [provider.gateway.ts](src/providers/pro
 
 | Demo capability | Environment setting |
 |---|---|
-| SMS | `SMS_PROVIDER` |
+| SMS | `SMS_PROVIDER` (set to `africastalking` + `AFRICASTALKING_API_KEY`/`AFRICASTALKING_USERNAME` for real delivery) |
 | Email | `EMAIL_PROVIDER` |
 | WhatsApp | `WHATSAPP_PROVIDER` |
 | Malware scanning | `MALWARE_SCANNER` |

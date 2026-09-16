@@ -12,6 +12,8 @@ class RefreshDto { @IsString() refreshToken!: string; }
 class RevokeDto { @IsUUID() sessionId!: string; }
 class VerificationDto { @IsEnum(VerificationType) type!: VerificationType; }
 class VerifyDto extends VerificationDto { @IsString() @MinLength(6) code!: string; }
+class PasswordResetRequestDto { @IsString() identifier!: string; }
+class PasswordResetConfirmDto { @IsString() identifier!: string; @IsString() @MinLength(6) code!: string; @IsString() @MinLength(10) newPassword!: string; }
 class ProfileDto { @IsOptional() @IsString() fullName?: string; @IsOptional() @IsString() province?: string; @IsOptional() @IsString() city?: string; @IsOptional() @IsString() suburb?: string; @IsOptional() @IsString() notificationPreference?: string; @IsOptional() @IsObject() deliveryAddress?: object; }
 
 @Controller('auth')
@@ -24,6 +26,10 @@ export class AuthController {
   @Post('admin/login') @HttpCode(HttpStatus.OK) @Throttle({ default: { ttl: 60_000, limit: 5 } })
   adminLogin(@Body() dto: LoginDto) { return this.auth.adminLogin(dto); }
   @Post('refresh') @HttpCode(HttpStatus.OK) refresh(@Body() dto: RefreshDto) { return this.auth.refresh(dto.refreshToken); }
+  @Post('password-reset/request') @HttpCode(HttpStatus.OK) @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto) { return this.auth.requestPasswordReset(dto.identifier); }
+  @Post('password-reset/confirm') @HttpCode(HttpStatus.OK) @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  confirmPasswordReset(@Body() dto: PasswordResetConfirmDto) { return this.auth.confirmPasswordReset(dto.identifier, dto.code, dto.newPassword); }
   @Get('sessions') @UseGuards(JwtAuthGuard) sessions(@CurrentUser() user: AuthUser) { return this.auth.sessions(user.userId); }
   @Post('sessions/revoke') @UseGuards(JwtAuthGuard) revoke(@CurrentUser() user: AuthUser, @Body() dto: RevokeDto) { return this.auth.revoke(user.userId, dto.sessionId); }
   @Post('verification/request') @UseGuards(JwtAuthGuard) request(@CurrentUser() user: AuthUser, @Body() dto: VerificationDto) { return this.auth.requestVerification(user.userId, dto.type); }
