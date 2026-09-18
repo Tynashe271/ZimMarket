@@ -12,7 +12,7 @@
 .earthy-hero .sun{background:#e1c969;box-shadow:inset 0 0 0 12px #f5e6ae50}
 .earthy-hero .arch{background:#e8d7b7;border-color:#f7ead0;box-shadow:22px 25px 0 #9f573b}
 .earthy-hero .arch:after{color:#163d31}
-.earthy-hero .floating-card{border:1px solid #fff;background:#fffaf0}.earthy-hero .stat-card{background:#d9e779;color:#163d31}.earthy-hero .stat-card span{color:#36584d}
+.earthy-hero .floating-card{border:1px solid #fff;background:#fffaf0;color:#163d31}.earthy-hero .floating-card small{color:#516058}.earthy-hero .stat-card{background:#d9e779;color:#163d31}.earthy-hero .stat-card span{color:#36584d}
 .earth-orbit{border-color:#f8eedb20}.orbit-one{box-shadow:0 0 0 40px #fff1,0 0 0 80px #fff1}
 .market-ribbon{margin-top:-1px;transform:none;background:#d9e779;color:#163d31;box-shadow:none;border-bottom:1px solid #bdcd64}.market-ribbon i{color:#a7593b}
 .categories{background:#f3eadb;padding-top:95px;padding-bottom:105px}.categories .section-heading h2{font-size:clamp(38px,4.8vw,60px)}
