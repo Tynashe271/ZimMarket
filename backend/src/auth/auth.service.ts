@@ -21,7 +21,7 @@ export class AuthService {
       if (dto.accountType === AccountType.CUSTOMER && (!dto.fullName || !dto.city || !dto.acceptedPolicies)) throw new BadRequestException('Customer name, city and policy acceptance are required');
       const { password, acceptedPolicies, deliveryAddress, ...profile } = dto;
       const user = await this.prisma.user.create({
-        data: { ...profile, email: dto.email?.toLowerCase(), passwordHash: await argon2.hash(password), ...(deliveryAddress ? { deliveryAddresses: [deliveryAddress] } : {}), ...(acceptedPolicies ? { policyVersion: '2026-08-22', policyAcceptedAt: new Date() } : {}) },
+        data: { ...profile, email: dto.email?.toLowerCase(), passwordHash: await argon2.hash(password), ...(deliveryAddress ? { deliveryAddresses: [deliveryAddress] } : {}), ...(acceptedPolicies ? { policyVersion: '2026-09-18', policyAcceptedAt: new Date() } : {}) },
         select: { id: true, email: true, phone: true, accountType: true, fullName: true, city: true, province: true, suburb: true, deliveryAddresses: true, notificationPreference: true, emailVerifiedAt: true, phoneVerifiedAt: true, policyVersion: true, policyAcceptedAt: true, createdAt: true },
       });
       return { user, ...(await this.createSession(user)) };
