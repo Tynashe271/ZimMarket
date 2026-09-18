@@ -24,12 +24,13 @@ export type MessageChannel='SMS'|'EMAIL'|'WHATSAPP';
   }
   if(provider!=='development')throw new BadRequestException(`${channel} provider credentials are not configured`);
   const message=await this.prisma.notificationOutbox.create({data:{channel,recipient:to,template,payload:this.json(data)}});await this.event(provider,`${channel}.send`,'SUCCESS',{messageId:message.id});return{provider,accepted:true,messageId:message.id,to:channel==='EMAIL'?this.maskEmail(to):`***${to.slice(-4)}`,template}}
- private renderSmsBody(template:string,data:Record<string,unknown>){if(template==='verification'&&typeof data.code==='string'){const purpose=data.type==='PASSWORD_RESET'?'password reset':data.type==='MFA'?'sign-in':'verification';return`Your ZimMarket ${purpose} code is ${data.code}. It expires in 10 minutes.`}return`ZimMarket: ${template}`}
+ private renderSmsBody(template:string,data:Record<string,unknown>){if(template==='verification'&&typeof data.code==='string'){const purpose=data.type==='PASSWORD_RESET'?'password reset':data.type==='MFA'?'sign-in':'verification';return`Your ZimMarket ${purpose} code is ${data.code}. It expires in 10 minutes.`}if(template==='new-message')return'You have a new message on ZimMarket. Open the app to reply.';return`ZimMarket: ${template}`}
  private renderEmailBody(template:string,data:Record<string,unknown>,unsubscribeUrl?:string){
   const footer=unsubscribeUrl?`<p style="font-size:12px;color:#667">You're receiving this because you have a ZimMarket account. <a href="${unsubscribeUrl}">Unsubscribe from these emails</a>.</p>`:'';
   if(template==='verification'&&typeof data.code==='string'){const purpose=data.type==='PASSWORD_RESET'?'password reset':data.type==='MFA'?'sign-in':'verification';const text=`Your ZimMarket ${purpose} code is ${data.code}. It expires in 10 minutes.`;return{subject:`Your ZimMarket ${purpose} code`,html:`<p>${text}</p>`,text}}
   if(template==='opportunity'){const category=typeof data.category==='string'?data.category:'marketplace';const text=`A new opportunity in the "${category}" category is available on ZimMarket.`;return{subject:'A new opportunity matches your interests',html:`<p>${text}</p>${footer}`,text}}
   if(template==='product-alert'){const text='A product you saved on ZimMarket has an update.';return{subject:'Update on a product you saved',html:`<p>${text}</p>${footer}`,text}}
+  if(template==='new-message'){const text='You have a new message on ZimMarket. Open the app to view and reply.';return{subject:'New message on ZimMarket',html:`<p>${text}</p>${footer}`,text}}
   const text=`ZimMarket: ${template}`;return{subject:text,html:`<p>${text}</p>${footer}`,text}}
  unsubscribeUrl(userId:string){const base=this.config.get('APP_PUBLIC_URL','http://localhost:3001');return`${base}/unsubscribe?userId=${encodeURIComponent(userId)}&signature=${this.unsubscribeSignature(userId)}`}
  async unsubscribeEmail(userId:string,signature:string){

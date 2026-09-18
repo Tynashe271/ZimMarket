@@ -4,10 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionPolicyService } from '../subscriptions/subscription-policy.service';
 import { ProviderGateway } from '../providers/provider.gateway';
+import { JobsService } from '../jobs/jobs.service';
 
 @Injectable()
 export class MarketplaceService {
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService, private readonly plans: SubscriptionPolicyService, private readonly providers: ProviderGateway) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService, private readonly plans: SubscriptionPolicyService, private readonly providers: ProviderGateway, private readonly jobs: JobsService) {}
   async createAd(userId: string, businessId: string, productId: string, title: string) {
     await this.member(userId, businessId, [BusinessRole.OWNER, BusinessRole.MANAGER, BusinessRole.MARKETING]);
     await this.plans.require(businessId, 'ADS');
@@ -45,10 +46,18 @@ export class MarketplaceService {
     return messages.reverse().map(message => message.deletedAt ? { ...message, body: '', attachmentKey: null } : message);
   }
   async sendMessage(userId: string, accountType: string, conversationId: string, body: string) {
-    await this.conversationAccess(userId, accountType, conversationId);
+    const conversation = await this.conversationAccess(userId, accountType, conversationId);
     const cleanBody = body.trim();
     if (!cleanBody) throw new ForbiddenException('Message cannot be empty');
-    return this.prisma.withContext({ userId, accountType }, async tx => { const message = await tx.message.create({ data: { senderId: userId, conversationId, body: cleanBody } }); await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }); return message; });
+    const message = await this.prisma.withContext({ userId, accountType }, async tx => { const created = await tx.message.create({ data: { senderId: userId, conversationId, body: cleanBody } }); await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }); return created; });
+    // In-app storage above is the "internal" side; queue an SMS/email alert too
+    // (the "external" side) so the other party isn't only notified by reopening
+    // the app. Recipients are whoever didn't send this message.
+    const recipientIds = userId === conversation.customerId
+      ? (await this.prisma.businessMember.findMany({ where: { businessId: conversation.businessId }, select: { userId: true } })).map(member => member.userId)
+      : [conversation.customerId];
+    await Promise.all(recipientIds.filter(id => id !== userId).map(id => this.jobs.newMessage(id, conversationId)));
+    return message;
   }
   async escalateConversation(userId: string, accountType: string, conversationId: string) {
     if (accountType === AccountType.ADMIN) throw new ForbiddenException('Conversation is already available to administrators');
