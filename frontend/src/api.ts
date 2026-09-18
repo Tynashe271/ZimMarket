@@ -56,6 +56,7 @@ export const api = {
   confirmVerification: (token: string, type: 'EMAIL'|'PHONE'|'MFA', code: string) => request<{ verified: boolean }>('/auth/verification/confirm', { method: 'POST', body: JSON.stringify({ type, code }) }, token),
   requestPasswordReset: (identifier: string) => request<{ accepted: boolean; developmentCode?: string }>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ identifier }) }),
   confirmPasswordReset: (identifier: string, code: string, newPassword: string) => request<{ reset: boolean }>('/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ identifier, code, newPassword }) }),
+  unsubscribe: (userId: string, signature: string) => request<{ unsubscribed: boolean; notificationPreference: string }>(`/notifications/unsubscribe?userId=${encodeURIComponent(userId)}&signature=${encodeURIComponent(signature)}`),
   profile: (token:string) => request<User>('/auth/profile',{},token),
   updateProfile: (token:string,data:Record<string,unknown>) => request<User>('/auth/profile',{method:'POST',body:JSON.stringify(data)},token),
   sessions: (token:string) => request<ActiveSession[]>('/auth/sessions',{},token),
