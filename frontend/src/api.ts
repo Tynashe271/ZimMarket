@@ -29,11 +29,40 @@ export function saveSession(session: Session | null) {
   else localStorage.removeItem(SESSION_KEY);
 }
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+// The access token is short-lived (15 minutes). Rather than surface an
+// "Unauthorized" error the moment it expires, silently exchange the
+// long-lived refresh token for a new session and retry once. Concurrent
+// 401s share one in-flight refresh instead of each racing their own.
+let refreshInFlight: Promise<Session | null> | null = null;
+
+async function refreshSession(): Promise<Session | null> {
+  const current = savedSession();
+  if (!current?.refreshToken) return null;
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${API_ROOT}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: current.refreshToken }),
+    }).then(async response => {
+      if (!response.ok) { saveSession(null); return null; }
+      const rotated = await response.json() as { accessToken: string; refreshToken: string; sessionId: string };
+      const next: Session = { ...current, ...rotated };
+      saveSession(next);
+      return next;
+    }).catch(() => null).finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, token?: string, isRetry = false): Promise<T> {
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
   });
+  if (response.status === 401 && token && !isRetry) {
+    const refreshed = await refreshSession();
+    if (refreshed) return request<T>(path, init, refreshed.accessToken, true);
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
