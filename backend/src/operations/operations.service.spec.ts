@@ -20,13 +20,14 @@ describe('OperationsService storefront isolation', () => {
 
   it('allows a business account to preview only its own storefront', async () => {
     const business = { id: 'business-a', name: 'Own Shop', slug: 'own-shop', branches: [], products: [], services: [], ads: [] };
+    const findMany = jest.fn().mockResolvedValue([]);
     const prisma = {
       businessMember: { findFirst: jest.fn().mockResolvedValue({ id: 'membership-a' }) },
       business: { findFirst: jest.fn().mockResolvedValue(business) },
       review: {
         aggregate: jest.fn().mockResolvedValue({ _avg: { rating: null }, _count: 0 }),
-        findMany: jest.fn().mockResolvedValue([]),
       },
+      withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ review: { findMany } })),
     } as never;
     const service = new OperationsService(prisma, {} as never);
 

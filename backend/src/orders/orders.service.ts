@@ -9,7 +9,7 @@ export class OrdersService {
   async create(customerId: string, accountType: string, items: { productId: string; quantity: number }[], branchId?: string, recipient?: { name: string; phone: string; address: string; city: string }) {
     if (accountType !== AccountType.CUSTOMER) throw new ForbiddenException('Customer account required');
     if (!items.length) throw new BadRequestException('Order requires at least one item');
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.withContext({ userId: customerId, accountType }, async (tx) => {
       const products=await tx.product.findMany({where:{id:{in:items.map(i=>i.productId)},status:'ACTIVE',business:{status:'ACTIVE',fiscalisation:{is:{status:{in:['COMPLIANT','EXPIRING_SOON']},taxpayerActive:true,deviceActive:true,deviceRegistered:true,receiptVerifiedAt:{not:null},taxClearanceExpiresAt:{gt:new Date()}}}}}});
       if (products.length !== items.length) throw new BadRequestException('One or more products are unavailable');
       const businessIds = new Set(products.map(p => p.businessId));
@@ -37,20 +37,20 @@ export class OrdersService {
       return order;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
-  listCustomer(customerId: string) { return this.prisma.order.findMany({ where: { customerId }, include: { items: true, payments: true, business: { select: { name: true, slug: true } }, recipient: true, delivery: true, review: true, dispute: true, refundRequests: true, invoice: true }, orderBy: { createdAt: 'desc' } }); }
+  listCustomer(customerId: string) { return this.prisma.withContext({ userId: customerId }, tx => tx.order.findMany({ where: { customerId }, include: { items: true, payments: true, business: { select: { name: true, slug: true } }, recipient: true, delivery: true, review: true, dispute: true, refundRequests: true, invoice: true }, orderBy: { createdAt: 'desc' } })); }
   async listBusiness(userId: string, businessId: string) {
     const member = await this.prisma.businessMember.findUnique({ where: { userId_businessId: { userId, businessId } } });
     if (!member) throw new NotFoundException('Business not found');
-    return this.prisma.order.findMany({ where: { businessId }, include: { items: true, payments: true, recipient:true, delivery:true, invoice:true, customer:{select:{id:true,fullName:true,phone:true,email:true}} }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.withContext({ userId }, tx => tx.order.findMany({ where: { businessId }, include: { items: true, payments: true, recipient:true, delivery:true, invoice:true, customer:{select:{id:true,fullName:true,phone:true,email:true}} }, orderBy: { createdAt: 'desc' } }));
   }
   async transition(userId: string, businessId: string, orderId: string, next: OrderStatus) {
     const member = await this.prisma.businessMember.findUnique({ where: { userId_businessId: { userId, businessId } } });
     if (!member) throw new NotFoundException('Business not found');
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, businessId } });
-    if (!order) throw new NotFoundException('Order not found');
-    const allowed: Partial<Record<OrderStatus, OrderStatus[]>> = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['PROCESSING','CANCELLED'], PAID: ['PROCESSING','REFUNDED'], PROCESSING: ['SHIPPED','CANCELLED'], SHIPPED: ['DELIVERED'] };
-    if (!allowed[order.status]?.includes(next)) throw new BadRequestException(`Invalid transition from ${order.status} to ${next}`);
-    return this.prisma.$transaction(async tx => {
+    return this.prisma.withContext({ userId }, async tx => {
+      const order = await tx.order.findFirst({ where: { id: orderId, businessId } });
+      if (!order) throw new NotFoundException('Order not found');
+      const allowed: Partial<Record<OrderStatus, OrderStatus[]>> = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['PROCESSING','CANCELLED'], PAID: ['PROCESSING','REFUNDED'], PROCESSING: ['SHIPPED','CANCELLED'], SHIPPED: ['DELIVERED'] };
+      if (!allowed[order.status]?.includes(next)) throw new BadRequestException(`Invalid transition from ${order.status} to ${next}`);
       const updated=await tx.order.update({ where: { id: order.id }, data: { status: next } });
       if(next==='DELIVERED'){
         const programs=await tx.loyaltyProgram.findMany({where:{businessId,active:true}});

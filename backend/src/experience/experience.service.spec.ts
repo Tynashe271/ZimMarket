@@ -42,7 +42,8 @@ describe('ExperienceService', () => {
   });
 
   it('rejects a review for a purchase that was not delivered', async () => {
-    const service = new ExperienceService({ order: { findFirst: jest.fn().mockResolvedValue(null) } } as never);
+    const withContext = jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn({ order: { findFirst: jest.fn().mockResolvedValue(null) } }));
+    const service = new ExperienceService({ withContext } as never);
     await expect(service.review('user-a', 'order-a', 5, 'Great service')).rejects.toBeInstanceOf(BadRequestException);
   });
 });

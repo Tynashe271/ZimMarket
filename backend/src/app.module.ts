@@ -5,7 +5,7 @@ import Redis from 'ioredis';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { LoggingThrottlerGuard } from './security/logging-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -70,6 +70,6 @@ import { ComplianceModule } from './compliance/compliance.module';
     ComplianceModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: LoggingThrottlerGuard }],
 })
 export class AppModule {}

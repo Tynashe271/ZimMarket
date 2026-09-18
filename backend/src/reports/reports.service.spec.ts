@@ -23,7 +23,8 @@ describe('ReportsService access control', () => {
   it('exports a CSV report through the accounting provider', async () => {
     const groupBy = jest.fn().mockResolvedValue([]);
     const exportAccounting = jest.fn().mockResolvedValue({ format: 'CSV', payload: 'section,currency,status_or_branch,count,total' });
-    const prisma = { businessMember: { findUnique: jest.fn().mockResolvedValue({ role: 'OWNER' }) }, order: { groupBy }, sale: { groupBy }, orderItem: { groupBy }, refundRequest: { groupBy }, auditLog: { groupBy }, advertisement: { groupBy } };
+    const tx = { order: { groupBy }, sale: { groupBy }, orderItem: { groupBy }, refundRequest: { groupBy }, auditLog: { groupBy }, advertisement: { groupBy } };
+    const prisma = { businessMember: { findUnique: jest.fn().mockResolvedValue({ role: 'OWNER' }) }, withContext: jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn(tx)) };
     const service = new ReportsService(prisma as never, { exportAccounting } as never, { require: jest.fn() } as never);
 
     await service.export('owner', 'business-a', new Date(), new Date(), 'CSV');

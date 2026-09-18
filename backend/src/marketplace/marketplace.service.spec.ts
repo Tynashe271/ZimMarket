@@ -29,7 +29,8 @@ describe('MarketplaceService', () => {
 
   it('scopes conversations to escalated threads for administrators', () => {
     const findMany = jest.fn();
-    const service = new MarketplaceService({ conversation: { findMany } } as never, {} as never, {} as never, {} as never);
+    const withContext = jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn({ conversation: { findMany } }));
+    const service = new MarketplaceService({ withContext } as never, {} as never, {} as never, {} as never);
 
     service.conversations('admin-1', AccountType.ADMIN);
 
@@ -44,13 +45,15 @@ describe('MarketplaceService', () => {
   });
 
   it('refuses to let one customer delete another customer\'s message', async () => {
+    const tx = { message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-a', senderId: 'other-user' }), update: jest.fn() } };
     const prisma = {
       conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a' }) },
-      message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-a', senderId: 'other-user' }), update: jest.fn() },
+      withContext: jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn(tx)),
     };
     const service = new MarketplaceService(prisma as never, {} as never, {} as never, {} as never);
 
     await expect(service.deleteMessage('user-a', AccountType.CUSTOMER, 'conversation-a', 'message-a')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(tx.message.update).not.toHaveBeenCalled();
   });
 
   it('rejects a document upload that fails the malware scan', async () => {

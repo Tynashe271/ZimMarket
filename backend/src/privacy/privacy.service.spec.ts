@@ -3,28 +3,29 @@ import { PrivacyService } from './privacy.service';
 
 describe('PrivacyService account deletion', () => {
   it('refuses to delete an account with an order still in progress', async () => {
-    const transaction = jest.fn();
-    const prisma = { order: { count: jest.fn().mockResolvedValue(1) }, $transaction: transaction };
-    const service = new PrivacyService(prisma as never);
+    const count = jest.fn().mockResolvedValue(1);
+    const withContext = jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn({ order: { count } }));
+    const service = new PrivacyService({ withContext } as never);
 
     await expect(service.remove('user-a')).rejects.toBeInstanceOf(BadRequestException);
-    expect(transaction).not.toHaveBeenCalled();
+    expect(withContext).toHaveBeenCalledTimes(1);
   });
 
   it('revokes sessions and scrubs identifying fields once orders are clear', async () => {
-    const transaction = jest.fn().mockImplementation(async (callback) => callback({ session: { updateMany: jest.fn() }, user: { update: jest.fn() }, auditLog: { create: jest.fn() } }));
-    const prisma = { order: { count: jest.fn().mockResolvedValue(0) }, $transaction: transaction };
-    const service = new PrivacyService(prisma as never);
+    const tx = { order: { count: jest.fn().mockResolvedValue(0) }, session: { updateMany: jest.fn() }, user: { update: jest.fn() }, auditLog: { create: jest.fn() } };
+    const withContext = jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn(tx));
+    const service = new PrivacyService({ withContext } as never);
 
     const result = await service.remove('user-a');
 
     expect(result).toEqual({ deleted: true });
-    expect(transaction).toHaveBeenCalled();
+    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'user-a' }, data: expect.objectContaining({ deletedAt: expect.any(Date) }) });
   });
 
   it('exports the user record along with related orders, memberships and messages', async () => {
     const findUniqueOrThrow = jest.fn().mockResolvedValue({ id: 'user-a' });
-    const service = new PrivacyService({ user: { findUniqueOrThrow } } as never);
+    const withContext = jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn({ user: { findUniqueOrThrow } }));
+    const service = new PrivacyService({ withContext } as never);
 
     const result = await service.export('user-a');
 

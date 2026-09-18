@@ -41,3 +41,45 @@ describe('FraudService order evaluation', () => {
     expect(findMany).toHaveBeenCalledWith({ where: { resolvedAt: null }, orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }] });
   });
 });
+
+describe('FraudService.verificationFailure', () => {
+  it('logs the first failed attempt at LOW severity', async () => {
+    const create = jest.fn();
+    const count = jest.fn().mockResolvedValue(0);
+    const service = new FraudService({ fraudSignal: { count, create } } as never);
+
+    await service.verificationFailure('user-a', 'PHONE');
+
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'user-a', type: 'VERIFICATION_CODE_BRUTE_FORCE', severity: 'LOW', details: { verificationType: 'PHONE', attempts: 1 } }) });
+  });
+
+  it('escalates to HIGH severity once repeated failures cross the threshold', async () => {
+    const create = jest.fn();
+    const count = jest.fn().mockResolvedValue(4);
+    const service = new FraudService({ fraudSignal: { count, create } } as never);
+
+    await service.verificationFailure('user-a', 'PASSWORD_RESET');
+
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ severity: 'HIGH', details: { verificationType: 'PASSWORD_RESET', attempts: 5 } }) });
+  });
+});
+
+describe('FraudService.rateLimitExceeded', () => {
+  it('logs a LOW severity signal just over the limit', async () => {
+    const create = jest.fn();
+    const service = new FraudService({ fraudSignal: { create } } as never);
+
+    await service.rateLimitExceeded('1.2.3.4', '/api/v1/auth/login', 'POST', 11, 10);
+
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: 'RATE_LIMIT_EXCEEDED', severity: 'LOW', details: { ip: '1.2.3.4', path: '/api/v1/auth/login', method: 'POST', totalHits: 11, limit: 10 } }) });
+  });
+
+  it('escalates to HIGH severity when hits are far past the limit', async () => {
+    const create = jest.fn();
+    const service = new FraudService({ fraudSignal: { create } } as never);
+
+    await service.rateLimitExceeded('1.2.3.4', '/api/v1/auth/login', 'POST', 40, 10);
+
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ severity: 'HIGH' }) });
+  });
+});

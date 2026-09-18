@@ -15,12 +15,14 @@ describe('NotificationProcessor compliance expiry scan', () => {
     };
     const transaction = jest.fn();
     const createMany = jest.fn();
+    const findMany = jest.fn().mockResolvedValue([fiscalisation]);
     const prisma = {
-      businessFiscalisation: { findMany: jest.fn().mockResolvedValue([fiscalisation]), update: jest.fn() },
+      businessFiscalisation: { findMany, update: jest.fn() },
       business: { update: jest.fn() },
       product: { updateMany: jest.fn() },
       notificationOutbox: { createMany },
       $transaction: transaction,
+      withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ businessFiscalisation: { findMany } })),
     };
     const processor = new NotificationProcessor(prisma as never, {} as never);
 
@@ -45,12 +47,14 @@ describe('NotificationProcessor compliance expiry scan', () => {
     const update = jest.fn();
     const businessUpdate = jest.fn();
     const createMany = jest.fn();
+    const findMany = jest.fn().mockResolvedValue([fiscalisation]);
     const prisma = {
-      businessFiscalisation: { findMany: jest.fn().mockResolvedValue([fiscalisation]), update },
+      businessFiscalisation: { findMany, update },
       business: { update: businessUpdate },
       product: { updateMany: jest.fn() },
       notificationOutbox: { createMany },
       $transaction: jest.fn(),
+      withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ businessFiscalisation: { findMany } })),
     };
     const processor = new NotificationProcessor(prisma as never, {} as never);
 
@@ -66,7 +70,8 @@ describe('NotificationProcessor compliance expiry scan', () => {
 
   it('dispatches a plain notification job through the configured provider', async () => {
     const send = jest.fn().mockResolvedValue({ accepted: true });
-    const prisma = { user: { findUnique: jest.fn().mockResolvedValue({ email: 'customer@zim.co.zw', phone: null }) } };
+    const findUnique = jest.fn().mockResolvedValue({ email: 'customer@zim.co.zw', phone: null });
+    const prisma = { withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ user: { findUnique } })) };
     const processor = new NotificationProcessor(prisma as never, { send } as never);
 
     const result = await processor.process(makeJob('order.confirmed', { userId: 'user-a', type: 'EMAIL' }));
@@ -77,7 +82,8 @@ describe('NotificationProcessor compliance expiry scan', () => {
 
   it('skips dispatch when the recipient has no address for the requested channel', async () => {
     const send = jest.fn();
-    const prisma = { user: { findUnique: jest.fn().mockResolvedValue({ email: null, phone: null }) } };
+    const findUnique = jest.fn().mockResolvedValue({ email: null, phone: null });
+    const prisma = { withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ user: { findUnique } })) };
     const processor = new NotificationProcessor(prisma as never, { send } as never);
 
     const result = await processor.process(makeJob('order.confirmed', { userId: 'user-a', type: 'EMAIL' }));

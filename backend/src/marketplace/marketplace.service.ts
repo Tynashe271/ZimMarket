@@ -26,26 +26,29 @@ export class MarketplaceService {
   async openConversation(userId: string, accountType: string, businessId: string, orderId?: string) {
     if (accountType !== AccountType.CUSTOMER) throw new ForbiddenException('Customer account required');
     if (orderId) {
-      const order = await this.prisma.order.findFirst({ where: { id: orderId, customerId: userId, businessId } });
+      const order = await this.prisma.withContext({ userId, accountType }, tx => tx.order.findFirst({ where: { id: orderId, customerId: userId, businessId } }));
       if (!order) throw new NotFoundException('Order not found');
     }
     const existing = await this.prisma.conversation.findFirst({ where: { customerId: userId, businessId, orderId: orderId || null } });
     return existing || this.prisma.conversation.create({ data: { customerId: userId, businessId, orderId } });
   }
   conversations(userId: string, accountType: string) {
+    // Conversation itself isn't RLS-protected, but the joined `customer` field
+    // is a User row -- Postgres enforces User's RLS policy on that join
+    // regardless, so this still needs the session context set.
     const where = accountType === AccountType.ADMIN ? { escalatedAt: { not: null } } : accountType === AccountType.CUSTOMER ? { customerId: userId } : { business: { members: { some: { userId } } } };
-    return this.prisma.conversation.findMany({ where, include: { business: { select: { id: true, name: true } }, customer: { select: { id: true, fullName: true, phone: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, senderId: true, body: true, createdAt: true, deletedAt: true } } }, orderBy: { updatedAt: 'desc' } });
+    return this.prisma.withContext({ userId, accountType }, tx => tx.conversation.findMany({ where, include: { business: { select: { id: true, name: true } }, customer: { select: { id: true, fullName: true, phone: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, senderId: true, body: true, createdAt: true, deletedAt: true } } }, orderBy: { updatedAt: 'desc' } }));
   }
   async messages(userId: string, accountType: string, conversationId: string) {
     await this.conversationAccess(userId, accountType, conversationId);
-    const messages = await this.prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: 'desc' }, take: 200, include: { sender: { select: { id: true, fullName: true, accountType: true } } } });
+    const messages = await this.prisma.withContext({ userId, accountType }, tx => tx.message.findMany({ where: { conversationId }, orderBy: { createdAt: 'desc' }, take: 200, include: { sender: { select: { id: true, fullName: true, accountType: true } } } }));
     return messages.reverse().map(message => message.deletedAt ? { ...message, body: '', attachmentKey: null } : message);
   }
   async sendMessage(userId: string, accountType: string, conversationId: string, body: string) {
     await this.conversationAccess(userId, accountType, conversationId);
     const cleanBody = body.trim();
     if (!cleanBody) throw new ForbiddenException('Message cannot be empty');
-    return this.prisma.$transaction(async tx => { const message = await tx.message.create({ data: { senderId: userId, conversationId, body: cleanBody } }); await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }); return message; });
+    return this.prisma.withContext({ userId, accountType }, async tx => { const message = await tx.message.create({ data: { senderId: userId, conversationId, body: cleanBody } }); await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }); return message; });
   }
   async escalateConversation(userId: string, accountType: string, conversationId: string) {
     if (accountType === AccountType.ADMIN) throw new ForbiddenException('Conversation is already available to administrators');
@@ -54,11 +57,13 @@ export class MarketplaceService {
   }
   async deleteMessage(userId: string, accountType: string, conversationId: string, messageId: string) {
     await this.conversationAccess(userId, accountType, conversationId);
-    const message = await this.prisma.message.findFirst({ where: { id: messageId, conversationId } });
-    if (!message) throw new NotFoundException('Message not found');
-    if (message.senderId !== userId && accountType !== AccountType.ADMIN) throw new ForbiddenException('You can only delete your own messages');
-    await this.prisma.message.update({ where: { id: messageId }, data: { body: '', attachmentKey: null, deletedAt: new Date() } });
-    return { deleted: true };
+    return this.prisma.withContext({ userId, accountType }, async tx => {
+      const message = await tx.message.findFirst({ where: { id: messageId, conversationId } });
+      if (!message) throw new NotFoundException('Message not found');
+      if (message.senderId !== userId && accountType !== AccountType.ADMIN) throw new ForbiddenException('You can only delete your own messages');
+      await tx.message.update({ where: { id: messageId }, data: { body: '', attachmentKey: null, deletedAt: new Date() } });
+      return { deleted: true };
+    });
   }
   async createDocument(userId: string, businessId: string | undefined, data: { type: string; storageKey: string; mimeType: string; sizeBytes: number }) {
     if (businessId) await this.member(userId, businessId, [BusinessRole.OWNER, BusinessRole.MANAGER]);

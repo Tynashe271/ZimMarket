@@ -20,7 +20,7 @@ export class ComplianceReminderService {
     const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     // Find businesses with compliance that need reminders
-    const fiscalisations = await this.prisma.businessFiscalisation.findMany({
+    const fiscalisations = await this.prisma.withSystemContext(tx => tx.businessFiscalisation.findMany({
       where: {
         status: {
           in: ['COMPLIANT', 'EXPIRING_SOON'],
@@ -43,7 +43,7 @@ export class ComplianceReminderService {
           },
         },
       },
-    });
+    }));
 
     for (const fiscalisation of fiscalisations) {
       const expiryDate = fiscalisation.taxClearanceExpiresAt;
@@ -183,7 +183,7 @@ export class ComplianceReminderService {
   }
 
   async sendManualReminder(fiscalisationId: string, reminderType: string) {
-    const fiscalisation = await this.prisma.businessFiscalisation.findUnique({
+    const fiscalisation = await this.prisma.withSystemContext(tx => tx.businessFiscalisation.findUnique({
       where: { id: fiscalisationId },
       include: {
         business: {
@@ -195,7 +195,7 @@ export class ComplianceReminderService {
           },
         },
       },
-    });
+    }));
 
     if (!fiscalisation) {
       throw new Error('Compliance record not found');

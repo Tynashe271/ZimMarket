@@ -4,7 +4,7 @@ import { CustomerService } from './customer.service';
 
 function emptyPrisma(overrides: Record<string, unknown> = {}) {
   const empty = { findMany: jest.fn().mockResolvedValue([]) };
-  return {
+  const tx = {
     user: { findUnique: jest.fn().mockResolvedValue({ email: 'customer@zim.co.zw', phone: null }) },
     booking: empty,
     conversation: empty,
@@ -17,14 +17,15 @@ function emptyPrisma(overrides: Record<string, unknown> = {}) {
     notificationOutbox: empty,
     ...overrides,
   };
+  return { withContext: jest.fn((_context: unknown, fn: (tx: unknown) => unknown) => fn(tx)) };
 }
 
 describe('CustomerService workspace', () => {
   it('rejects a non-customer account before querying the database', async () => {
-    const findUnique = jest.fn();
-    const service = new CustomerService({ user: { findUnique } } as never);
+    const withContext = jest.fn();
+    const service = new CustomerService({ withContext } as never);
     await expect(service.workspace('user-a', AccountType.BUSINESS)).rejects.toBeInstanceOf(ForbiddenException);
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(withContext).not.toHaveBeenCalled();
   });
 
   it('assembles the customer workspace from every related record type', async () => {

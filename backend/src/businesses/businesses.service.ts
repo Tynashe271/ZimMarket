@@ -12,7 +12,7 @@ export class BusinessesService {
     private readonly restrictionService: StoreRestrictionService,
   ) {}
   list(userId: string) {
-    return this.prisma.business.findMany({
+    return this.prisma.withContext({ userId }, tx => tx.business.findMany({
       where: { members: { some: { userId } } },
       include: {
         members: {
@@ -25,7 +25,7 @@ export class BusinessesService {
         subscription: true,
         documents: true, fiscalisation: true,
       },
-    });
+    }));
   }
   async create(userId: string, accountType: string, name: string, slug: string) {
     if (accountType !== AccountType.BUSINESS) throw new ForbiddenException('Business account required');
@@ -39,8 +39,14 @@ export class BusinessesService {
     const actor = await this.prisma.businessMember.findUnique({ where: { userId_businessId: { userId: actorId, businessId } } });
     if (!actor || actor.role !== BusinessRole.OWNER) throw new ForbiddenException('Business owner permission required to manage staff');
     await this.plans.require(businessId, 'STAFF'); await this.plans.staffCapacity(businessId);
-    const user = await this.prisma.user.findUnique({ where: { phone } }); if (!user) throw new ForbiddenException('User must register before being added');
-    return this.prisma.businessMember.upsert({ where: { userId_businessId: { userId: user.id, businessId } }, create: { userId: user.id, businessId, role, branches: { create: branchIds.map(branchId => ({ branchId })) } }, update: { role, branches: { deleteMany: {}, create: branchIds.map(branchId => ({ branchId })) } }, include: { user: { select: { id: true, fullName: true, phone: true, email: true } }, branches: { include: { branch: { select: { id: true, name: true } } } } } });
+    // The invited phone number has no existing relationship to this business
+    // yet -- that's the entire point of this lookup -- so it can't be expressed
+    // by a relational RLS policy. The caller's OWNER membership is already
+    // verified above, so this bypass is scoped to a single justified lookup.
+    return this.prisma.withSystemContext(async tx => {
+      const user = await tx.user.findUnique({ where: { phone } }); if (!user) throw new ForbiddenException('User must register before being added');
+      return tx.businessMember.upsert({ where: { userId_businessId: { userId: user.id, businessId } }, create: { userId: user.id, businessId, role, branches: { create: branchIds.map(branchId => ({ branchId })) } }, update: { role, branches: { deleteMany: {}, create: branchIds.map(branchId => ({ branchId })) } }, include: { user: { select: { id: true, fullName: true, phone: true, email: true } }, branches: { include: { branch: { select: { id: true, name: true } } } } } });
+    });
   }
   async settings(userId: string, businessId: string) {
     await this.requireMember(userId, businessId);
@@ -72,22 +78,26 @@ export class BusinessesService {
   }
   async notifications(userId: string, businessId: string) {
     await this.requireMember(userId, businessId);
-    const members = await this.prisma.businessMember.findMany({ where: { businessId }, include: { user: { select: { email: true, phone: true } } } });
-    const recipients = members.flatMap(member => [member.user.email, member.user.phone]).filter((value): value is string => Boolean(value));
-    const [messages, orders, lowStock] = await Promise.all([
-      recipients.length ? this.prisma.notificationOutbox.findMany({ where: { recipient: { in: recipients } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
-      this.prisma.order.findMany({ where: { businessId }, select: { id: true, status: true, total: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 10 }),
-      this.prisma.product.findMany({ where: { businessId, stockQuantity: { lte: 5 } }, select: { id: true, name: true, stockQuantity: true, updatedAt: true }, take: 10 }),
-    ]);
-    return { messages, orderAlerts: orders, stockAlerts: lowStock };
+    return this.prisma.withContext({ userId }, async tx => {
+      const members = await tx.businessMember.findMany({ where: { businessId }, include: { user: { select: { email: true, phone: true } } } });
+      const recipients = members.flatMap(member => [member.user.email, member.user.phone]).filter((value): value is string => Boolean(value));
+      const [messages, orders, lowStock] = await Promise.all([
+        recipients.length ? tx.notificationOutbox.findMany({ where: { recipient: { in: recipients } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
+        tx.order.findMany({ where: { businessId }, select: { id: true, status: true, total: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 10 }),
+        tx.product.findMany({ where: { businessId, stockQuantity: { lte: 5 } }, select: { id: true, name: true, stockQuantity: true, updatedAt: true }, take: 10 }),
+      ]);
+      return { messages, orderAlerts: orders, stockAlerts: lowStock };
+    });
   }
   async readNotification(userId: string, businessId: string, notificationId: string) {
     await this.requireMember(userId, businessId);
-    const members = await this.prisma.businessMember.findMany({ where: { businessId }, include: { user: { select: { email: true, phone: true } } } });
-    const recipients = members.flatMap(member => [member.user.email, member.user.phone]).filter((value): value is string => Boolean(value));
-    const result = await this.prisma.notificationOutbox.updateMany({ where: { id: notificationId, recipient: { in: recipients } }, data: { readAt: new Date() } });
-    if (!result.count) throw new ForbiddenException('Notification access denied');
-    return { read: true };
+    return this.prisma.withContext({ userId }, async tx => {
+      const members = await tx.businessMember.findMany({ where: { businessId }, include: { user: { select: { email: true, phone: true } } } });
+      const recipients = members.flatMap(member => [member.user.email, member.user.phone]).filter((value): value is string => Boolean(value));
+      const result = await tx.notificationOutbox.updateMany({ where: { id: notificationId, recipient: { in: recipients } }, data: { readAt: new Date() } });
+      if (!result.count) throw new ForbiddenException('Notification access denied');
+      return { read: true };
+    });
   }
   private async requireMember(userId: string, businessId: string) {
     const member = await this.prisma.businessMember.findUnique({ where: { userId_businessId: { userId, businessId } } });
