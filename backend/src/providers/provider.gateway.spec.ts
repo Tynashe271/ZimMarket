@@ -2,8 +2,15 @@ import { randomUUID } from 'crypto';
 import { unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- see provider.gateway.ts
 import sharp = require('sharp');
 import { ProviderGateway } from './provider.gateway';
+
+const mockFile = { save: jest.fn(), download: jest.fn() };
+const mockFileFn = jest.fn(() => mockFile);
+jest.mock('@google-cloud/storage', () => ({
+  Storage: jest.fn().mockImplementation(() => ({ bucket: () => ({ file: mockFileFn }) })),
+}));
 
 function makeConfig(overrides: Record<string, string> = {}) {
   return {
@@ -48,6 +55,34 @@ describe('ProviderGateway', () => {
     expect(result.size).toBeLessThan(image.length);
     expect(result.mimeType).toBe('image/jpeg');
     await unlink(join(storageDir, key));
+  });
+
+  it('stores an upload in Cloud Storage instead of local disk when GCS_BUCKET_NAME is configured', async () => {
+    mockFile.save.mockClear().mockResolvedValueOnce(undefined);
+    const prisma = { providerEvent: { create: jest.fn() } };
+    const service = new ProviderGateway(makeConfig({ GCS_BUCKET_NAME: 'zimmarket-uploads' }) as never, prisma as never, {} as never, {} as never, {} as never);
+    const key = `user/${randomUUID()}.pdf`;
+    const upload = service.signedUpload(key, 'application/pdf');
+    const buffer = Buffer.from('%PDF-1.4 test document');
+
+    const result = await service.store(key, 'application/pdf', upload.expires, upload.signature, buffer);
+
+    expect(mockFileFn).toHaveBeenCalledWith(key);
+    expect(mockFile.save).toHaveBeenCalledWith(buffer, { contentType: 'application/pdf', resumable: false });
+    expect(result.key).toBe(key);
+  });
+
+  it('downloads from Cloud Storage and maps a missing object to NotFoundException when GCS_BUCKET_NAME is configured', async () => {
+    const prisma = { providerEvent: { create: jest.fn() } };
+    const service = new ProviderGateway(makeConfig({ GCS_BUCKET_NAME: 'zimmarket-uploads' }) as never, prisma as never, {} as never, {} as never, {} as never);
+    const key = `user/${randomUUID()}.pdf`;
+    const download = service.signedDownload(key);
+
+    mockFile.download.mockClear().mockResolvedValueOnce([Buffer.from('hello')]);
+    await expect(service.load(key, download.expires, download.signature)).resolves.toEqual(Buffer.from('hello'));
+
+    mockFile.download.mockClear().mockRejectedValueOnce({ code: 404 });
+    await expect(service.load(key, download.expires, download.signature)).rejects.toThrow('File not found');
   });
 
   it('produces stable demo coordinates inside Zimbabwe bounds', async () => {

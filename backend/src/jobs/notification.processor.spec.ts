@@ -24,7 +24,8 @@ describe('NotificationProcessor compliance expiry scan', () => {
       $transaction: transaction,
       withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ businessFiscalisation: { findMany } })),
     };
-    const processor = new NotificationProcessor(prisma as never, {} as never);
+    const logAction = jest.fn();
+    const processor = new NotificationProcessor(prisma as never, {} as never, { logAction } as never);
 
     const result = await processor.process(makeJob('compliance-expiry-scan'));
 
@@ -32,6 +33,7 @@ describe('NotificationProcessor compliance expiry scan', () => {
     expect(createMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.arrayContaining([expect.objectContaining({ template: 'TAX_CLEARANCE_EXPIRED', recipient: 'owner@zim.co.zw' })]),
     }));
+    expect(logAction).toHaveBeenCalledWith('fiscalisation-a', 'STATUS_CHANGED', 'SYSTEM', 'SYSTEM', 'COMPLIANT', 'EXPIRED', { reason: 'certificate_expired' });
     expect(result).toEqual({ checked: 1, reminded: 1, suspended: 1 });
   });
 
@@ -56,7 +58,8 @@ describe('NotificationProcessor compliance expiry scan', () => {
       $transaction: jest.fn(),
       withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ businessFiscalisation: { findMany } })),
     };
-    const processor = new NotificationProcessor(prisma as never, {} as never);
+    const logAction = jest.fn();
+    const processor = new NotificationProcessor(prisma as never, {} as never, { logAction } as never);
 
     const result = await processor.process(makeJob('compliance-expiry-scan'));
 
@@ -65,6 +68,7 @@ describe('NotificationProcessor compliance expiry scan', () => {
     expect(createMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.arrayContaining([expect.objectContaining({ template: 'TAX_CLEARANCE_EXPIRES_7_DAYS' })]),
     }));
+    expect(logAction).not.toHaveBeenCalled();
     expect(result).toEqual({ checked: 1, reminded: 1, suspended: 0 });
   });
 
@@ -72,7 +76,7 @@ describe('NotificationProcessor compliance expiry scan', () => {
     const send = jest.fn().mockResolvedValue({ accepted: true });
     const findUnique = jest.fn().mockResolvedValue({ email: 'customer@zim.co.zw', phone: null });
     const prisma = { withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ user: { findUnique } })) };
-    const processor = new NotificationProcessor(prisma as never, { send } as never);
+    const processor = new NotificationProcessor(prisma as never, { send } as never, {} as never);
 
     const result = await processor.process(makeJob('order.confirmed', { userId: 'user-a', type: 'EMAIL' }));
 
@@ -84,7 +88,7 @@ describe('NotificationProcessor compliance expiry scan', () => {
     const send = jest.fn();
     const findUnique = jest.fn().mockResolvedValue({ email: null, phone: null });
     const prisma = { withSystemContext: jest.fn((fn: (tx: unknown) => unknown) => fn({ user: { findUnique } })) };
-    const processor = new NotificationProcessor(prisma as never, { send } as never);
+    const processor = new NotificationProcessor(prisma as never, { send } as never, {} as never);
 
     const result = await processor.process(makeJob('order.confirmed', { userId: 'user-a', type: 'EMAIL' }));
 

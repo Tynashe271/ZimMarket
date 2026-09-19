@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ComplianceController } from './compliance.controller';
 import { ComplianceService } from './compliance.service';
 import { PrismaModule } from '../prisma/prisma.module';
-import { ComplianceReminderService } from './compliance-reminder.service';
 import { StoreRestrictionService } from './store-restriction.service';
 import { ComplianceAuditService } from './compliance-audit.service';
 import { ZimraIntegrationService } from './zimra-integration.service';
@@ -12,7 +11,6 @@ import { ZimraIntegrationService } from './zimra-integration.service';
   controllers: [ComplianceController],
   providers: [
     ComplianceService,
-    ComplianceReminderService,
     StoreRestrictionService,
     ComplianceAuditService,
     ZimraIntegrationService,

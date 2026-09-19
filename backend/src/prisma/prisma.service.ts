@@ -5,6 +5,16 @@ export interface RlsContext { userId?: string; accountType?: string }
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  // DATABASE_URL stays the migration/owner role (used by `prisma migrate deploy`
+  // in the Dockerfile CMD, which never goes through this constructor). The app
+  // itself connects as APP_DATABASE_URL -- the non-owner `zimmarket_app` role
+  // from prisma/rls-role-setup.sql -- so RLS policies actually apply to queries
+  // made at runtime. Falls back to DATABASE_URL when unset (e.g. local dev),
+  // matching prior behavior exactly.
+  constructor() {
+    super({ datasources: { db: { url: process.env.APP_DATABASE_URL || process.env.DATABASE_URL } } });
+  }
+
   async onModuleInit() { await this.$connect(); }
   async onModuleDestroy() { await this.$disconnect(); }
 

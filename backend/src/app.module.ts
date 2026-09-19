@@ -4,7 +4,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { APP_GUARD } from '@nestjs/core';
 import { LoggingThrottlerGuard } from './security/logging-throttler.guard';
 import { AuthModule } from './auth/auth.module';
@@ -31,6 +31,16 @@ import { ReportsModule } from './reports/reports.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { ComplianceModule } from './compliance/compliance.module';
 
+// Shared by BullMQ and the rate-limiter storage below -- both need their own
+// ioredis connection to the same Redis, since a rate limit backed by
+// per-instance memory (the @nestjs/throttler default) becomes N-times too
+// permissive across N Cloud Run instances and resets on every scale event.
+function redisClient(config: ConfigService): Redis {
+  return config.get<string>('REDIS_URL')
+    ? new Redis(config.get<string>('REDIS_URL')!, { maxRetriesPerRequest: null })
+    : new Redis({ host: config.get('REDIS_HOST', 'localhost'), port: config.get<number>('REDIS_PORT', 6380), maxRetriesPerRequest: null });
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -39,18 +49,16 @@ import { ComplianceModule } from './compliance/compliance.module';
     // public/services, public/ads. Not shared across instances, which is fine
     // for a short TTL on data that's public and non-personalized anyway.
     CacheModule.register({ isGlobal: true, ttl: 30_000 }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
-    ScheduleModule.forRoot(),
-    BullModule.forRootAsync({
+    ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: config.get<string>('REDIS_URL')
-          ? new Redis(config.get<string>('REDIS_URL')!, { maxRetriesPerRequest: null })
-          : {
-              host: config.get('REDIS_HOST', 'localhost'),
-              port: config.get<number>('REDIS_PORT', 6380),
-            },
+        throttlers: [{ ttl: 60_000, limit: 100 }],
+        storage: new ThrottlerStorageRedisService(redisClient(config)),
       }),
+    }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({ connection: redisClient(config) }),
     }),
     PrismaModule,
     SubscriptionsModule,

@@ -2,7 +2,6 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { ComplianceStatus, BusinessRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import { ComplianceReminderService } from './compliance-reminder.service';
 import { StoreRestrictionService } from './store-restriction.service';
 import { ComplianceAuditService } from './compliance-audit.service';
 import { ZimraIntegrationService } from './zimra-integration.service';
@@ -12,7 +11,6 @@ export class ComplianceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly reminderService: ComplianceReminderService,
     private readonly restrictionService: StoreRestrictionService,
     private readonly auditService: ComplianceAuditService,
     private readonly zimraService: ZimraIntegrationService,

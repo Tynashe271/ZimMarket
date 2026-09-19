@@ -3,7 +3,7 @@ import { BusinessRole } from '@prisma/client';
 import { ComplianceService } from './compliance.service';
 
 function makeService(prisma: unknown) {
-  return new ComplianceService(prisma as never, {} as never, {} as never, {} as never, { logAction: jest.fn() } as never, {} as never);
+  return new ComplianceService(prisma as never, {} as never, {} as never, { logAction: jest.fn() } as never, {} as never);
 }
 
 describe('ComplianceService access control', () => {
