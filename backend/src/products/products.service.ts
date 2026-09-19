@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { SubscriptionPolicyService } from '../subscriptions/subscription-policy.service';
 import { StoreRestrictionService } from '../compliance/store-restriction.service';
+import { PaginationQueryDto, paginate } from '../common/pagination.dto';
 
 const productManagers: BusinessRole[] = [BusinessRole.OWNER, BusinessRole.MANAGER, BusinessRole.INVENTORY];
 
@@ -15,17 +16,18 @@ export class ProductsService {
     private readonly restrictionService: StoreRestrictionService,
   ) {}
 
-  listPublic() {
+  listPublic(query: PaginationQueryDto = {}) {
     return this.prisma.product.findMany({
       where: { status: ProductStatus.ACTIVE, business: { status: 'ACTIVE', fiscalisation: { is: { status: { in:['COMPLIANT','EXPIRING_SOON'] }, taxpayerActive:true,deviceActive:true,deviceRegistered:true,receiptVerifiedAt:{not:null},taxClearanceExpiresAt:{gt:new Date()} } } } },
       // Public discovery exposes availability through active publication only. Exact
       // stock quantities remain private to authorized staff and customer checkout.
       select: { id: true, name: true, slug: true, description: true, price: true, business: { select: { id: true, name: true, slug: true } } },
       orderBy: { createdAt: 'desc' },
+      ...paginate(query),
     });
   }
 
-  listStorefront(accountType: string) {
+  listStorefront(accountType: string, query: PaginationQueryDto = {}) {
     if (accountType !== AccountType.CUSTOMER) throw new ForbiddenException('Approved customer account required');
     return this.prisma.product.findMany({
       where: { status: ProductStatus.ACTIVE, business: { status: 'ACTIVE', fiscalisation: { is: { status: { in:['COMPLIANT','EXPIRING_SOON'] }, taxpayerActive:true,deviceActive:true,deviceRegistered:true,receiptVerifiedAt:{not:null},taxClearanceExpiresAt:{gt:new Date()} } } } },
@@ -34,12 +36,13 @@ export class ProductsService {
         business: { select: { name: true, slug: true } },
       },
       orderBy: { createdAt: 'desc' },
+      ...paginate(query),
     });
   }
 
-  async listForBusiness(userId: string, businessId: string) {
+  async listForBusiness(userId: string, businessId: string, query: PaginationQueryDto = {}) {
     await this.requireMembership(userId, businessId);
-    return this.prisma.product.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.product.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' }, ...paginate(query) });
   }
 
   async create(userId: string, businessId: string, dto: CreateProductDto) {

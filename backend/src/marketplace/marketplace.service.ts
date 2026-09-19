@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { SubscriptionPolicyService } from '../subscriptions/subscription-policy.service';
 import { ProviderGateway } from '../providers/provider.gateway';
 import { JobsService } from '../jobs/jobs.service';
+import { PaginationQueryDto, paginate } from '../common/pagination.dto';
 
 @Injectable()
 export class MarketplaceService {
@@ -17,11 +18,13 @@ export class MarketplaceService {
     if (!product) throw new NotFoundException('Product not found');
     return this.prisma.advertisement.create({ data: { businessId, productId, title, status: AdStatus.PENDING_REVIEW } });
   }
-  publicAds() {
+  publicAds(query: PaginationQueryDto = {}) {
     const now = new Date();
     return this.prisma.advertisement.findMany({
       where: { status:AdStatus.ACTIVE,business:{status:'ACTIVE',fiscalisation:{is:{status:{in:['COMPLIANT','EXPIRING_SOON']},taxClearanceExpiresAt:{gt:now},taxpayerActive:true,deviceActive:true,deviceRegistered:true,receiptVerifiedAt:{not:null}}}}, OR: [{ startsAt: null }, { startsAt: { lte: now } }], AND: [{ OR: [{ endsAt: null }, { endsAt: { gt: now } }] }] },
       select: { id: true, title: true, endsAt: true, product: { select: { id: true, name: true, slug: true, description: true, price: true } }, business: { select: { name: true, slug: true } } },
+      orderBy: { createdAt: 'desc' },
+      ...paginate(query),
     });
   }
   async openConversation(userId: string, accountType: string, businessId: string, orderId?: string) {
@@ -33,12 +36,12 @@ export class MarketplaceService {
     const existing = await this.prisma.conversation.findFirst({ where: { customerId: userId, businessId, orderId: orderId || null } });
     return existing || this.prisma.conversation.create({ data: { customerId: userId, businessId, orderId } });
   }
-  conversations(userId: string, accountType: string) {
+  conversations(userId: string, accountType: string, query: PaginationQueryDto = {}) {
     // Conversation itself isn't RLS-protected, but the joined `customer` field
     // is a User row -- Postgres enforces User's RLS policy on that join
     // regardless, so this still needs the session context set.
     const where = accountType === AccountType.ADMIN ? { escalatedAt: { not: null } } : accountType === AccountType.CUSTOMER ? { customerId: userId } : { business: { members: { some: { userId } } } };
-    return this.prisma.withContext({ userId, accountType }, tx => tx.conversation.findMany({ where, include: { business: { select: { id: true, name: true } }, customer: { select: { id: true, fullName: true, phone: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, senderId: true, body: true, createdAt: true, deletedAt: true } } }, orderBy: { updatedAt: 'desc' } }));
+    return this.prisma.withContext({ userId, accountType }, tx => tx.conversation.findMany({ where, include: { business: { select: { id: true, name: true } }, customer: { select: { id: true, fullName: true, phone: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, senderId: true, body: true, createdAt: true, deletedAt: true } } }, orderBy: { updatedAt: 'desc' }, ...paginate(query) }));
   }
   async messages(userId: string, accountType: string, conversationId: string) {
     await this.conversationAccess(userId, accountType, conversationId);

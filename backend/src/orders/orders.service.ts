@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { AccountType, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { FraudService } from '../security/fraud.service';
+import { PaginationQueryDto, paginate } from '../common/pagination.dto';
 
 @Injectable()
 export class OrdersService {
@@ -37,11 +38,11 @@ export class OrdersService {
       return order;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
-  listCustomer(customerId: string) { return this.prisma.withContext({ userId: customerId }, tx => tx.order.findMany({ where: { customerId }, include: { items: true, payments: true, business: { select: { name: true, slug: true } }, recipient: true, delivery: true, review: true, dispute: true, refundRequests: true, invoice: true }, orderBy: { createdAt: 'desc' } })); }
-  async listBusiness(userId: string, businessId: string) {
+  listCustomer(customerId: string, query: PaginationQueryDto = {}) { return this.prisma.withContext({ userId: customerId }, tx => tx.order.findMany({ where: { customerId }, include: { items: true, payments: true, business: { select: { name: true, slug: true } }, recipient: true, delivery: true, review: true, dispute: true, refundRequests: true, invoice: true }, orderBy: { createdAt: 'desc' }, ...paginate(query) })); }
+  async listBusiness(userId: string, businessId: string, query: PaginationQueryDto = {}) {
     const member = await this.prisma.businessMember.findUnique({ where: { userId_businessId: { userId, businessId } } });
     if (!member) throw new NotFoundException('Business not found');
-    return this.prisma.withContext({ userId }, tx => tx.order.findMany({ where: { businessId }, include: { items: true, payments: true, recipient:true, delivery:true, invoice:true, customer:{select:{id:true,fullName:true,phone:true,email:true}} }, orderBy: { createdAt: 'desc' } }));
+    return this.prisma.withContext({ userId }, tx => tx.order.findMany({ where: { businessId }, include: { items: true, payments: true, recipient:true, delivery:true, invoice:true, customer:{select:{id:true,fullName:true,phone:true,email:true}} }, orderBy: { createdAt: 'desc' }, ...paginate(query) }));
   }
   async transition(userId: string, businessId: string, orderId: string, next: OrderStatus) {
     const member = await this.prisma.businessMember.findUnique({ where: { userId_businessId: { userId, businessId } } });

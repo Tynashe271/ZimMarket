@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { AccountType, AdStatus, BusinessStatus, DisputeStatus, DocumentStatus, PayoutStatus, ReportStatus, VerificationLevel } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaginationQueryDto, paginate } from '../common/pagination.dto';
 @Injectable() export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
   assertAdmin(type: string) { if (type !== AccountType.ADMIN) throw new ForbiddenException('Admin permission required'); }
@@ -9,10 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
   async ad(actorId: string, type: string, id: string, status: AdStatus) { this.assertAdmin(type); const value = await this.prisma.advertisement.update({ where: { id }, data: { status } }); await this.audit(actorId, 'ad.moderate', 'Advertisement', id, { status }); return value; }
   async document(actorId: string, type: string, id: string, status: DocumentStatus) { this.assertAdmin(type); const value = await this.prisma.document.update({ where: { id }, data: { status, reviewedAt: new Date() } }); await this.audit(actorId, 'document.review', 'Document', id, { status }); return value; }
   async payout(actorId: string, type: string, id: string, status: PayoutStatus) { this.assertAdmin(type); const value = await this.prisma.payout.update({ where: { id }, data: { status, approvedById: status === 'APPROVED' ? actorId : undefined } }); await this.audit(actorId, 'payout.review', 'Payout', id, { status }); return value; }
-  reports(type: string) { this.assertAdmin(type); return this.prisma.report.findMany({ where: { status: { in: [ReportStatus.OPEN, ReportStatus.INVESTIGATING] } }, orderBy: { createdAt: 'asc' } }); }
+  reports(type: string, query: PaginationQueryDto = {}) { this.assertAdmin(type); return this.prisma.report.findMany({ where: { status: { in: [ReportStatus.OPEN, ReportStatus.INVESTIGATING] } }, orderBy: { createdAt: 'asc' }, ...paginate(query) }); }
   async verification(actorId:string,type:string,id:string,level:VerificationLevel){this.assertAdmin(type);const value=await this.prisma.business.update({where:{id},data:{verificationLevel:level}});await this.audit(actorId,'business.verification','Business',id,{level});return value}
   async review(actorId:string,type:string,id:string,hidden:boolean){this.assertAdmin(type);const value=await this.prisma.review.update({where:{id},data:{hidden,moderatedAt:new Date()}});await this.audit(actorId,'review.moderate','Review',id,{hidden});return value}
   async dispute(actorId:string,type:string,id:string,status:DisputeStatus,resolution?:string){this.assertAdmin(type);const value=await this.prisma.dispute.update({where:{id},data:{status,resolution}});await this.audit(actorId,'dispute.resolve','Dispute',id,{status});return value}
-  tickets(type:string){this.assertAdmin(type);return this.prisma.supportTicket.findMany({where:{status:{in:['OPEN','INVESTIGATING']}},orderBy:{createdAt:'asc'}})}
+  tickets(type:string,query:PaginationQueryDto={}){this.assertAdmin(type);return this.prisma.supportTicket.findMany({where:{status:{in:['OPEN','INVESTIGATING']}},orderBy:{createdAt:'asc'},...paginate(query)})}
   private audit(actorId: string, action: string, resource: string, resourceId: string, metadata: object) { return this.prisma.auditLog.create({ data: { actorId, action, resource, resourceId, metadata } }); }
 }

@@ -15,13 +15,13 @@ export class CustomerService {
       const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true, phone: true } });
       const recipients = [user?.email, user?.phone].filter((value): value is string => Boolean(value));
       const [bookings, conversations, follows, reservations, tickets, reports, refunds, activity, notifications] = await Promise.all([
-        tx.booking.findMany({ where: { customerId: userId }, include: { service: { include: { business: { select: { name: true, slug: true } } } }, branch: { select: { name: true, city: true } } }, orderBy: { createdAt: 'desc' } }),
-        tx.conversation.findMany({ where: { customerId: userId }, include: { business: { select: { name: true, slug: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { updatedAt: 'desc' } }),
-        tx.productFollow.findMany({ where: { customerId: userId }, include: { product: { include: { business: { select: { name: true, slug: true } } } } } }),
-        tx.reservation.findMany({ where: { customerId: userId }, include: { product: { select: { name: true } }, branch: { select: { name: true, city: true } } }, orderBy: { expiresAt: 'desc' } }),
-        tx.supportTicket.findMany({ where: { userId }, include: { business: { select: { name: true } } }, orderBy: { updatedAt: 'desc' } }),
-        tx.report.findMany({ where: { reporterId: userId }, include: { business: { select: { name: true } } }, orderBy: { createdAt: 'desc' } }),
-        tx.refundRequest.findMany({ where: { requesterId: userId }, include: { order: { select: { id: true, total: true, currency: true } }, business: { select: { name: true } } }, orderBy: { updatedAt: 'desc' } }),
+        tx.booking.findMany({ where: { customerId: userId }, include: { service: { include: { business: { select: { name: true, slug: true } } } }, branch: { select: { name: true, city: true } } }, orderBy: { createdAt: 'desc' }, take: 100 }),
+        tx.conversation.findMany({ where: { customerId: userId }, include: { business: { select: { name: true, slug: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { updatedAt: 'desc' }, take: 100 }),
+        tx.productFollow.findMany({ where: { customerId: userId }, include: { product: { include: { business: { select: { name: true, slug: true } } } } }, take: 100 }),
+        tx.reservation.findMany({ where: { customerId: userId }, include: { product: { select: { name: true } }, branch: { select: { name: true, city: true } } }, orderBy: { expiresAt: 'desc' }, take: 100 }),
+        tx.supportTicket.findMany({ where: { userId }, include: { business: { select: { name: true } } }, orderBy: { updatedAt: 'desc' }, take: 100 }),
+        tx.report.findMany({ where: { reporterId: userId }, include: { business: { select: { name: true } } }, orderBy: { createdAt: 'desc' }, take: 100 }),
+        tx.refundRequest.findMany({ where: { requesterId: userId }, include: { order: { select: { id: true, total: true, currency: true } }, business: { select: { name: true } } }, orderBy: { updatedAt: 'desc' }, take: 100 }),
         tx.auditLog.findMany({ where: { actorId: userId }, orderBy: { createdAt: 'desc' }, take: 50, select: { id: true, action: true, resource: true, resourceId: true, createdAt: true, ipAddress: true } }),
         recipients.length ? tx.notificationOutbox.findMany({ where: { recipient: { in: recipients } }, orderBy: { createdAt: 'desc' }, take: 50 }) : Promise.resolve([]),
       ]);

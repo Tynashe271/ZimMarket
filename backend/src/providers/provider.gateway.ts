@@ -1,5 +1,6 @@
-import{BadRequestException,Injectable,NotFoundException,UnauthorizedException}from'@nestjs/common';import{ConfigService}from'@nestjs/config';import{Prisma}from'@prisma/client';import{createHash,createHmac,timingSafeEqual}from'crypto';import{mkdir,readFile,writeFile}from'fs/promises';import{dirname,extname,isAbsolute,resolve,sep}from'path';import{PrismaService}from'../prisma/prisma.service';import{AfricasTalkingProvider}from'./africastalking.provider';import{TwilioProvider}from'./twilio.provider';import{SmsProvider,SmsSendResult}from'./sms-provider.interface';import{ResendProvider}from'./resend.provider';import{EmailProvider,EmailSendResult}from'./email-provider.interface';
+import{BadRequestException,Injectable,NotFoundException,UnauthorizedException}from'@nestjs/common';import{ConfigService}from'@nestjs/config';import{Prisma}from'@prisma/client';import{createHash,createHmac,timingSafeEqual}from'crypto';import{mkdir,readFile,writeFile}from'fs/promises';import{dirname,extname,isAbsolute,resolve,sep}from'path';import sharp=require('sharp');import{PrismaService}from'../prisma/prisma.service';import{AfricasTalkingProvider}from'./africastalking.provider';import{TwilioProvider}from'./twilio.provider';import{SmsProvider,SmsSendResult}from'./sms-provider.interface';import{ResendProvider}from'./resend.provider';import{EmailProvider,EmailSendResult}from'./email-provider.interface';
 export type MessageChannel='SMS'|'EMAIL'|'WHATSAPP';
+const ALLOWED_UPLOAD_MIME_TYPES=new Set(['image/jpeg','image/png','image/webp','image/gif','application/pdf']);
 @Injectable()export class ProviderGateway{
  private readonly smsProviders:Record<string,SmsProvider>;
  private readonly emailProviders:Record<string,EmailProvider>;
@@ -48,11 +49,23 @@ export type MessageChannel='SMS'|'EMAIL'|'WHATSAPP';
   return{unsubscribed:true,notificationPreference:next}}
  private unsubscribeSignature(userId:string){return createHmac('sha256',this.config.getOrThrow('STORAGE_SIGNING_SECRET')).update(`unsubscribe:${userId}`).digest('hex')}
  private maskEmail(email:string){const[name,domain]=email.split('@');return domain?`${name.slice(0,2)}***@${domain}`:'***'}
- async scan(storageKey:string,mimeType:string){const blocked=['.exe','.dll','.bat','.cmd','.ps1','.com','.scr'];const clean=!blocked.includes(extname(storageKey).toLowerCase())&&!mimeType.includes('x-msdownload');return{storageKey,mimeType,clean,engine:this.config.get('MALWARE_SCANNER','development')}}
+ async scan(storageKey:string,mimeType:string){const blocked=['.exe','.dll','.bat','.cmd','.ps1','.com','.scr'];const clean=ALLOWED_UPLOAD_MIME_TYPES.has(mimeType)&&!blocked.includes(extname(storageKey).toLowerCase())&&!mimeType.includes('x-msdownload');return{storageKey,mimeType,clean,engine:this.config.get('MALWARE_SCANNER','development')}}
  async scanBuffer(storageKey:string,mimeType:string,buffer:Buffer){const metadata=await this.scan(storageKey,mimeType);const eicar=buffer.toString('utf8').includes('EICAR-STANDARD-ANTIVIRUS-TEST-FILE');return{...metadata,clean:metadata.clean&&!eicar,sha256:createHash('sha256').update(buffer).digest('hex')}}
  signedUpload(storageKey:string,mimeType:string,expiresSeconds=900){return this.signed('upload',storageKey,mimeType,expiresSeconds)}
  signedDownload(storageKey:string,expiresSeconds=300){return this.signed('download',storageKey,'',expiresSeconds)}
- async store(key:string,mime:string,expires:number,signature:string,buffer:Buffer){this.verify('upload',key,mime,expires,signature);const scan=await this.scanBuffer(key,mime,buffer);if(!scan.clean)throw new BadRequestException('File failed malware scan');const path=this.path(key);await mkdir(dirname(path),{recursive:true});await writeFile(path,buffer,{flag:'wx'}).catch(async error=>{if((error as NodeJS.ErrnoException).code==='EEXIST')await writeFile(path,buffer);else throw error});await this.event('local-storage','upload','SUCCESS',{key,size:buffer.length,sha256:scan.sha256});return{key,size:buffer.length,mimeType:mime,sha256:scan.sha256}}
+ async store(key:string,mime:string,expires:number,signature:string,buffer:Buffer){this.verify('upload',key,mime,expires,signature);const scan=await this.scanBuffer(key,mime,buffer);if(!scan.clean)throw new BadRequestException('File failed malware scan');const stored=await this.compress(buffer,mime);const sha256=createHash('sha256').update(stored).digest('hex');const path=this.path(key);await mkdir(dirname(path),{recursive:true});await writeFile(path,stored,{flag:'wx'}).catch(async error=>{if((error as NodeJS.ErrnoException).code==='EEXIST')await writeFile(path,stored);else throw error});await this.event('local-storage','upload','SUCCESS',{key,size:stored.length,sha256});return{key,size:stored.length,mimeType:mime,sha256}}
+ // Only static raster images are recompressed -- GIF is skipped so animations
+ // aren't collapsed to a single frame, and PDFs pass through untouched.
+ private async compress(buffer:Buffer,mime:string):Promise<Buffer>{
+  if(!['image/jpeg','image/png','image/webp'].includes(mime))return buffer;
+  try{
+   const image=sharp(buffer).rotate().resize({width:1920,height:1920,fit:'inside',withoutEnlargement:true});
+   const compressed=mime==='image/png'?await image.png({quality:80,compressionLevel:9}).toBuffer():mime==='image/webp'?await image.webp({quality:80}).toBuffer():await image.jpeg({quality:80,mozjpeg:true}).toBuffer();
+   return compressed.length<buffer.length?compressed:buffer;
+  }catch{
+   return buffer;
+  }
+ }
  async load(key:string,expires:number,signature:string){this.verify('download',key,'',expires,signature);try{const data=await readFile(this.path(key));await this.event('local-storage','download','SUCCESS',{key,size:data.length});return data}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')throw new NotFoundException('File not found');throw error}}
  async geocode(address:string,city:string){const digest=createHash('sha256').update(`${address}|${city}`).digest();const latitude=-22+(digest.readUInt16BE(0)/65535)*7;const longitude=25+(digest.readUInt16BE(2)/65535)*8;return{provider:this.config.get('MAPS_PROVIDER','development'),address,city,latitude:Number(latitude.toFixed(7)),longitude:Number(longitude.toFixed(7)),demoCoordinates:true}}
  async exportAccounting(format:'CSV'|'JSON',payload:unknown){await this.event(this.config.get('ACCOUNTING_PROVIDER','internal'),'accounting.export','SUCCESS',{format});return{format,payload,provider:this.config.get('ACCOUNTING_PROVIDER','internal')}}

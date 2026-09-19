@@ -49,6 +49,7 @@ export class AfricasTalkingProvider implements SmsProvider {
           apiKey: this.apiKey,
         },
         body: body.toString(),
+        signal: AbortSignal.timeout(10_000),
       });
       data = (await response.json()) as AfricasTalkingResponse;
     } catch {

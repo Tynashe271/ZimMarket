@@ -1,4 +1,5 @@
 import { BullModule } from '@nestjs/bullmq';
+import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
@@ -33,6 +34,11 @@ import { ComplianceModule } from './compliance/compliance.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // In-memory (per-instance) cache for read-heavy public endpoints -- see
+    // CacheInterceptor usage on public/products, public/businesses,
+    // public/services, public/ads. Not shared across instances, which is fine
+    // for a short TTL on data that's public and non-personalized anyway.
+    CacheModule.register({ isGlobal: true, ttl: 30_000 }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({

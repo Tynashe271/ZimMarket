@@ -109,3 +109,30 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      # audit-level=critical, not high: a high-severity advisory currently sits in
+      # prisma's CLI dev tooling only (deepmerge-ts stack exhaustion, not shipped
+      # in the runtime client) and fixing it means a breaking prisma downgrade --
+      # tracked as a deferred upgrade, not something this gate should block on.
+      - run: npm audit --audit-level=critical
+        working-directory: backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm audit --audit-level=critical
+        working-directory: frontend

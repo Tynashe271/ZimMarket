@@ -18,7 +18,7 @@ export class AssistantService {
     const apiKey = this.config.get<string>('OPENAI_API_KEY')?.trim();
     if (apiKey) {
       try {
-        const client = new OpenAI({ apiKey });
+        const client = new OpenAI({ apiKey, timeout: 15_000 });
         const response = await client.responses.create({
           model: this.config.get('OPENAI_MODEL', 'gpt-5.4'),
           store: false,

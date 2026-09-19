@@ -97,6 +97,7 @@ export class PaynowProvider {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ ...fields, hash }).toString(),
+        signal: AbortSignal.timeout(10_000),
       });
       text = await response.text();
     } catch {
@@ -122,6 +123,7 @@ export class PaynowProvider {
       const response = await fetch(pollUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: AbortSignal.timeout(10_000),
       });
       text = await response.text();
     } catch {

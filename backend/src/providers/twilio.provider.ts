@@ -45,6 +45,7 @@ export class TwilioProvider implements SmsProvider {
           Authorization: `Basic ${Buffer.from(`${this.accountSid}:${this.authToken}`).toString('base64')}`,
         },
         body: body.toString(),
+        signal: AbortSignal.timeout(10_000),
       });
       ok = response.ok;
       data = (await response.json()) as TwilioMessageResponse;

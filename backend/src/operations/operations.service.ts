@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { AccountType, AvailabilityStatus, BusinessRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionPolicyService } from '../subscriptions/subscription-policy.service';
+import { PaginationQueryDto, paginate } from '../common/pagination.dto';
 
 const management: BusinessRole[] = [BusinessRole.OWNER, BusinessRole.MANAGER];
 const inventoryRoles: BusinessRole[] = [...management, BusinessRole.INVENTORY];
@@ -14,8 +15,8 @@ const inventoryRoles: BusinessRole[] = [...management, BusinessRole.INVENTORY];
     await this.plans.require(businessId, 'BRANCHES');
     return this.prisma.branch.create({ data: { ...data, deliveryAreas: data.deliveryAreas ?? [], businessId } });
   }
-  discover(city?: string, province?: string, tag?: string) {
-    return this.prisma.business.findMany({ where: { status:'ACTIVE',fiscalisation:{is:{status:{in:['COMPLIANT','EXPIRING_SOON']},taxClearanceExpiresAt:{gt:new Date()},taxpayerActive:true,deviceActive:true,deviceRegistered:true,receiptVerifiedAt:{not:null}}}, ...(tag ? { communityTags: { has: tag } } : {}), branches: { some: { ...(city ? { city: { equals: city, mode: 'insensitive' } } : {}), ...(province ? { province: { equals: province, mode: 'insensitive' } } : {}) } } }, select: { id: true, name: true, slug: true, industry: true, communityTags: true, verificationLevel: true, branches: { select: { id: true, name: true, province: true, city: true, suburb: true, deliveryAreas: true, operatingHours: true } } } });
+  discover(city?: string, province?: string, tag?: string, query: PaginationQueryDto = {}) {
+    return this.prisma.business.findMany({ where: { status:'ACTIVE',fiscalisation:{is:{status:{in:['COMPLIANT','EXPIRING_SOON']},taxClearanceExpiresAt:{gt:new Date()},taxpayerActive:true,deviceActive:true,deviceRegistered:true,receiptVerifiedAt:{not:null}}}, ...(tag ? { communityTags: { has: tag } } : {}), branches: { some: { ...(city ? { city: { equals: city, mode: 'insensitive' } } : {}), ...(province ? { province: { equals: province, mode: 'insensitive' } } : {}) } } }, select: { id: true, name: true, slug: true, industry: true, communityTags: true, verificationLevel: true, branches: { select: { id: true, name: true, province: true, city: true, suburb: true, deliveryAreas: true, operatingHours: true } } }, orderBy: { createdAt: 'desc' }, ...paginate(query) });
   }
   async storefront(userId:string,accountType:string,slug: string) {
     if(accountType!==AccountType.CUSTOMER){const own=accountType===AccountType.BUSINESS&&await this.prisma.businessMember.findFirst({where:{userId,business:{slug}}});if(!own)throw new ForbiddenException('A customer account is required to enter this storefront');}

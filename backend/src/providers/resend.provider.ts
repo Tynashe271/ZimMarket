@@ -36,6 +36,7 @@ export class ResendProvider implements EmailProvider {
           Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({ from: this.fromAddress, to, subject, html, text }),
+        signal: AbortSignal.timeout(10_000),
       });
       ok = response.ok;
       data = (await response.json()) as ResendResponse;

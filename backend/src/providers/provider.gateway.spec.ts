@@ -1,3 +1,8 @@
+import { randomUUID } from 'crypto';
+import { unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import sharp = require('sharp');
 import { ProviderGateway } from './provider.gateway';
 
 function makeConfig(overrides: Record<string, string> = {}) {
@@ -22,6 +27,27 @@ describe('ProviderGateway', () => {
     const service = new ProviderGateway(config as never, {} as never, {} as never, {} as never, {} as never);
     const scan = await service.scanBuffer('user/test.txt', 'text/plain', Buffer.from('EICAR-STANDARD-ANTIVIRUS-TEST-FILE'));
     expect(scan.clean).toBe(false);
+  });
+
+  it('rejects an upload whose mime type is not on the allowlist', async () => {
+    const service = new ProviderGateway(config as never, {} as never, {} as never, {} as never, {} as never);
+    const scan = await service.scan('user/script.sh', 'application/x-sh');
+    expect(scan.clean).toBe(false);
+  });
+
+  it('compresses an oversized JPEG before storing it, and leaves the sha256/size consistent with what was written', async () => {
+    const storageDir = join(tmpdir(), `zimmarket-test-${randomUUID()}`);
+    const prisma = { providerEvent: { create: jest.fn() } };
+    const service = new ProviderGateway(makeConfig({ LOCAL_STORAGE_PATH: storageDir }) as never, prisma as never, {} as never, {} as never, {} as never);
+    const image = await sharp({ create: { width: 2000, height: 2000, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg({ quality: 100 }).toBuffer();
+    const key = `user/${randomUUID()}.jpg`;
+    const upload = service.signedUpload(key, 'image/jpeg');
+
+    const result = await service.store(key, 'image/jpeg', upload.expires, upload.signature, image);
+
+    expect(result.size).toBeLessThan(image.length);
+    expect(result.mimeType).toBe('image/jpeg');
+    await unlink(join(storageDir, key));
   });
 
   it('produces stable demo coordinates inside Zimbabwe bounds', async () => {
